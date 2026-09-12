@@ -1,7 +1,6 @@
 package com.vernai
 
 import android.app.Application
-import androidx.room.Room
 import com.vernai.core.common.dispatchers.DefaultVernAiDispatchers
 import com.vernai.core.common.dispatchers.VernAiDispatchers
 import com.vernai.core.common.mutex.InferenceLock
@@ -26,13 +25,7 @@ class VernAiApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
-
-        database = Room.databaseBuilder(
-            applicationContext,
-            VernAiDatabase::class.java,
-            VernAiDatabase.DATABASE_NAME
-        ).fallbackToDestructiveMigration()
-         .build()
+        database = VernAiDatabase.create(this)
     }
 
     companion object {

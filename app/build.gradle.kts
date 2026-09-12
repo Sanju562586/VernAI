@@ -76,7 +76,7 @@ dependencies {
     // Local Persistence: Room
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    annotationProcessor(libs.androidx.room.compiler)
+    compileOnly(libs.androidx.room.compiler)
 
     // Navigation
     implementation(libs.androidx.navigation3.ui)

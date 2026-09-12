@@ -45,6 +45,7 @@ fun VernAiNavigation() {
                 val voiceViewModel: VoiceWorkspaceViewModel = viewModel {
                     VoiceWorkspaceViewModel(
                         asrEngine = app.asrEngine,
+                        llmEngine = app.llmEngine,
                         dispatchers = app.dispatchers
                     )
                 }
@@ -73,6 +74,7 @@ fun VernAiNavigation() {
                 val letterViewModel: LetterEditorViewModel = viewModel {
                     LetterEditorViewModel(
                         complaintRepository = LocalComplaintRepository(app.database),
+                        llmEngine = app.llmEngine,
                         dispatchers = app.dispatchers
                     )
                 }

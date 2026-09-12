@@ -18,6 +18,7 @@ import java.util.UUID
 
 class LetterEditorViewModel(
     private val complaintRepository: ComplaintRepository? = null,
+    private val llmEngine: com.vernai.ai.llm.LlmInferenceEngine = com.vernai.ai.mock.MockLlmInferenceEngine(),
     private val exporter: DocumentExporter = MockDocumentExporter(),
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
 ) : MviViewModel<LetterUiState, LetterUiIntent, LetterUiSideEffect>(LetterUiState()) {
@@ -38,18 +39,25 @@ class LetterEditorViewModel(
     private fun regenerateWithLlm() {
         setState { copy(isRegenerating = true) }
         viewModelScope.launch(dispatchers.default) {
-            delay(800) // Simulated local LLM regeneration
-            setState {
-                copy(
-                    isRegenerating = false,
-                    vernacularBody = """
+            val prompt = "గ్రామీణ పౌర సమస్య: ${uiState.value.subject} గురించి ${uiState.value.department} కు అధికారిక వినతిపత్రం ముసాయిదా రూపొందించండి."
+            val result = llmEngine.generateCompleteText(prompt)
+            val generatedBody = if (result is VernAiResult.Success && result.data.isNotBlank()) {
+                result.data
+            } else {
+                """
 గౌరవనీయులైన పంచాయతీ అధికారి గారికి,
 
 మా ప్రాంతమైన శాంతినగర్‌లో విద్యుత్ దీపాలు మరియు తాగునీటి సమస్య తీవ్రంగా ఉన్నందున, ప్రజా శ్రేయస్సు దృష్ట్యా తక్షణ విచారణ చేపట్టి పరిష్కరించవలసిందిగా కోరుచున్నాము.
 
 ధన్యవాదములతో,
 గ్రామస్తులు.
-                    """.trimIndent()
+                """.trimIndent()
+            }
+
+            setState {
+                copy(
+                    isRegenerating = false,
+                    vernacularBody = generatedBody
                 )
             }
             sendSideEffect(LetterUiSideEffect.ShowToast("ముసాయిదా తిరిగి రూపొందించబడింది (Regenerated)"))

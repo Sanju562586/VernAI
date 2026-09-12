@@ -93,15 +93,25 @@ class VoiceWorkspaceViewModel(
                     DetectedIntentType.COMPLAINT_LETTER
                 }
 
-                val preview = when (detected) {
-                    DetectedIntentType.SALES_RECORD ->
-                        "గుర్తించిన అమ్మకాలు (Sales Detected):\n• టమాటా: 5 kg = ₹200\n• నూనె ప్యాకెట్లు: 2 = ₹260\nమొత్తం: ₹460"
-                    DetectedIntentType.COMPLAINT_LETTER ->
-                        "ఫిర్యాదు ముసాయిదా (Complaint Draft):\nశాంతినగర్ పరిధిలో వీధి దీపాల సమస్య పరిష్కారం కోసం వినతిపత్రం."
-                    else -> "ఆడియో విశ్లేషణ పూర్తయింది."
+                val llmPrompt = if (detected == DetectedIntentType.SALES_RECORD) {
+                    "విశ్లేషించండి (Extract Sales items): $finalPrompt"
+                } else {
+                    "వినతిపత్రం (Draft Complaint): $finalPrompt"
+                }
+                val llmResult = llmEngine.generateCompleteText(llmPrompt)
+
+                val preview = if (llmResult is VernAiResult.Success && llmResult.data.isNotBlank()) {
+                    llmResult.data
+                } else {
+                    when (detected) {
+                        DetectedIntentType.SALES_RECORD ->
+                            "గుర్తించిన అమ్మకాలు (Sales Detected):\n• టమాటా: 5 kg = ₹200\n• నూనె ప్యాకెట్లు: 2 = ₹260\nమొత్తం: ₹460"
+                        DetectedIntentType.COMPLAINT_LETTER ->
+                            "ఫిర్యాదు ముసాయిదా (Complaint Draft):\nశాంతినగర్ పరిధిలో వీధి దీపాల సమస్య పరిష్కారం కోసం వినతిపత్రం."
+                        else -> "ఆడియో విశ్లేషణ పూర్తయింది."
+                    }
                 }
 
-                delay(600) // Realistic local model reasoning pause
                 setState {
                     copy(
                         liveTranscript = finalPrompt,

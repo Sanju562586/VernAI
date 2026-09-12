@@ -2,12 +2,14 @@ package com.vernai.ui.voice
 
 import androidx.lifecycle.viewModelScope
 import com.vernai.ai.asr.AsrEngine
+import com.vernai.ai.asr.AsrState
 import com.vernai.ai.llm.GenerationParameters
 import com.vernai.ai.llm.LlmInferenceEngine
 import com.vernai.ai.mock.MockAsrEngine
 import com.vernai.ai.mock.MockLlmInferenceEngine
 import com.vernai.core.common.dispatchers.DefaultVernAiDispatchers
 import com.vernai.core.common.dispatchers.VernAiDispatchers
+import com.vernai.core.common.result.VernAiResult
 import com.vernai.core.model.Language
 import com.vernai.ui.common.MviViewModel
 import com.vernai.ui.navigation.VernAiNavDestination
@@ -24,6 +26,21 @@ class VoiceWorkspaceViewModel(
 
     private var recordingJob: Job? = null
     private var timerJob: Job? = null
+    private var decibelMonitorJob: Job? = null
+
+    init {
+        viewModelScope.launch(dispatchers.asrInference) {
+            asrEngine.initialize(uiState.value.activeLanguage)
+        }
+
+        decibelMonitorJob = viewModelScope.launch(dispatchers.main) {
+            asrEngine.state.collect { asrState ->
+                if (asrState is AsrState.Recording) {
+                    setState { copy(audioDecibels = asrState.decibels) }
+                }
+            }
+        }
+    }
 
     override fun handleIntent(intent: VoiceUiIntent) {
         when (intent) {
@@ -62,9 +79,15 @@ class VoiceWorkspaceViewModel(
             setState { copy(isRecording = false, stage = ProcessingStage.REASONING_LLM) }
 
             viewModelScope.launch(dispatchers.default) {
-                // Simulate local LLM categorization & intent extraction
-                val prompt = uiState.value.liveTranscript
-                val detected = if (prompt.contains("అమ్మిన") || prompt.contains("రూపాయలు") || prompt.contains("కేజీ")) {
+                // Ensure remaining buffer is flushed from ASR
+                val stopResult = asrEngine.stopLiveTranscription()
+                val finalPrompt = if (stopResult is VernAiResult.Success && stopResult.data.text.isNotBlank()) {
+                    stopResult.data.text
+                } else {
+                    uiState.value.liveTranscript
+                }
+
+                val detected = if (finalPrompt.contains("అమ్మిన") || finalPrompt.contains("రూపాయలు") || finalPrompt.contains("కేజీ")) {
                     DetectedIntentType.SALES_RECORD
                 } else {
                     DetectedIntentType.COMPLAINT_LETTER
@@ -81,6 +104,7 @@ class VoiceWorkspaceViewModel(
                 delay(600) // Realistic local model reasoning pause
                 setState {
                     copy(
+                        liveTranscript = finalPrompt,
                         stage = ProcessingStage.COMPLETED,
                         detectedIntent = detected,
                         extractedResultPreview = preview
@@ -112,16 +136,29 @@ class VoiceWorkspaceViewModel(
             // Start ASR stream
             recordingJob = viewModelScope.launch(dispatchers.asrInference) {
                 asrEngine.startLiveTranscription(uiState.value.activeLanguage)
-                    .catch { e -> setState { copy(errorMessage = e.message, isRecording = false, stage = ProcessingStage.IDLE) } }
+                    .catch { e ->
+                        val friendlyMessage = if (e is SecurityException) {
+                            "మైక్రోఫోన్ అనుమతి నిరాకరించబడింది (Microphone permission denied)"
+                        } else {
+                            e.message ?: "ఆడియో రికార్డింగ్ విఫలమైంది (Audio recording failed)"
+                        }
+                        setState { copy(errorMessage = friendlyMessage, isRecording = false, stage = ProcessingStage.IDLE) }
+                    }
                     .collect { partial ->
                         setState {
                             copy(
-                                liveTranscript = partial.text,
-                                audioDecibels = (50..85).random().toFloat()
+                                liveTranscript = partial.text
                             )
                         }
                     }
             }
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        recordingJob?.cancel()
+        timerJob?.cancel()
+        decibelMonitorJob?.cancel()
     }
 }

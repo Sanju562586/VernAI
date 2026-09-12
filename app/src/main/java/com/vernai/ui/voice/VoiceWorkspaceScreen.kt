@@ -74,6 +74,10 @@ fun VoiceWorkspaceScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
+    val permissionState = com.vernai.ui.common.rememberAudioPermissionState {
+        viewModel.handleIntent(VoiceUiIntent.ToggleRecording)
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.sideEffect.collect { effect ->
             when (effect) {
@@ -123,12 +127,34 @@ fun VoiceWorkspaceScreen(
             // Live Status Header
             StatusChipBar(state = state)
 
+            // Error Message Banner (if any)
+            AnimatedVisibility(visible = state.errorMessage != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = state.errorMessage ?: "",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
             // Mic Recording Core
             MicRecordingZone(
                 isRecording = state.isRecording,
                 durationSec = state.recordingDurationSec,
                 decibels = state.audioDecibels,
-                onToggle = { viewModel.handleIntent(VoiceUiIntent.ToggleRecording) }
+                onToggle = {
+                    if (!state.isRecording && !permissionState.hasPermission) {
+                        permissionState.requestPermission()
+                    } else {
+                        viewModel.handleIntent(VoiceUiIntent.ToggleRecording)
+                    }
+                }
             )
 
             // Live Transcription Card

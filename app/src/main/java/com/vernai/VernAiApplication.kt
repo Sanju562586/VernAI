@@ -22,6 +22,10 @@ class VernAiApplication : Application() {
         InferenceLock()
     }
 
+    val asrEngine: com.vernai.ai.asr.AsrEngine by lazy {
+        com.vernai.ai.asr.OnDeviceAsrEngine(this, dispatchers = dispatchers)
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this

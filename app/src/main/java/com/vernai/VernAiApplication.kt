@@ -26,6 +26,18 @@ class VernAiApplication : Application() {
         com.vernai.ai.asr.OnDeviceAsrEngine(this, dispatchers = dispatchers)
     }
 
+    val memoryMonitor: com.vernai.core.common.memory.MemoryPressureMonitor by lazy {
+        com.vernai.core.common.memory.AndroidMemoryPressureMonitor(this)
+    }
+
+    val llmEngine: com.vernai.ai.llm.LlmInferenceEngine by lazy {
+        com.vernai.ai.llm.LlamaCppInferenceEngine(
+            memoryMonitor = memoryMonitor,
+            inferenceLock = inferenceLock,
+            dispatchers = dispatchers
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         instance = this

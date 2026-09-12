@@ -8,6 +8,9 @@ sealed interface VernAiNavDestination : NavKey {
     data object Home : VernAiNavDestination
 
     @Serializable
+    data object VoiceWorkspace : VernAiNavDestination
+
+    @Serializable
     data object Settings : VernAiNavDestination
 
     @Serializable

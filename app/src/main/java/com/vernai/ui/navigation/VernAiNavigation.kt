@@ -1,33 +1,31 @@
 package com.vernai.ui.navigation
 
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.vernai.VernAiApplication
+import com.vernai.domain.repository.LocalComplaintRepository
+import com.vernai.domain.repository.LocalDocumentRepository
+import com.vernai.domain.repository.LocalSalesLogRepository
+import com.vernai.ui.document.DocReaderScreen
+import com.vernai.ui.document.DocReaderViewModel
 import com.vernai.ui.home.HomeScreen
 import com.vernai.ui.home.HomeViewModel
+import com.vernai.ui.letter.LetterEditorScreen
+import com.vernai.ui.letter.LetterEditorViewModel
+import com.vernai.ui.sales.SalesLogScreen
+import com.vernai.ui.sales.SalesViewModel
 import com.vernai.ui.settings.SettingsScreen
 import com.vernai.ui.settings.SettingsViewModel
+import com.vernai.ui.voice.VoiceWorkspaceScreen
+import com.vernai.ui.voice.VoiceWorkspaceViewModel
 
 @Composable
 fun VernAiNavigation() {
     val backStack = rememberNavBackStack(VernAiNavDestination.Home)
+    val app = VernAiApplication.instance
 
     NavDisplay(
         backStack = backStack,
@@ -35,11 +33,61 @@ fun VernAiNavigation() {
         entryProvider = entryProvider {
             entry<VernAiNavDestination.Home> {
                 val homeViewModel: HomeViewModel = viewModel {
-                    HomeViewModel(VernAiApplication.instance.database)
+                    HomeViewModel(app.database)
                 }
                 HomeScreen(
                     viewModel = homeViewModel,
                     onNavigate = { destination -> backStack.add(destination) }
+                )
+            }
+
+            entry<VernAiNavDestination.VoiceWorkspace> {
+                val voiceViewModel: VoiceWorkspaceViewModel = viewModel {
+                    VoiceWorkspaceViewModel(dispatchers = app.dispatchers)
+                }
+                VoiceWorkspaceScreen(
+                    viewModel = voiceViewModel,
+                    onNavigateBack = { backStack.removeLastOrNull() },
+                    onNavigateToDestination = { destination -> backStack.add(destination) }
+                )
+            }
+
+            entry<VernAiNavDestination.SalesLedger> {
+                val salesViewModel: SalesViewModel = viewModel {
+                    SalesViewModel(
+                        salesLogRepository = LocalSalesLogRepository(app.database),
+                        dispatchers = app.dispatchers
+                    )
+                }
+                SalesLogScreen(
+                    viewModel = salesViewModel,
+                    onNavigateBack = { backStack.removeLastOrNull() }
+                )
+            }
+
+            entry<VernAiNavDestination.ComplaintDrafting> {
+                val letterViewModel: LetterEditorViewModel = viewModel {
+                    LetterEditorViewModel(
+                        complaintRepository = LocalComplaintRepository(app.database),
+                        dispatchers = app.dispatchers
+                    )
+                }
+                LetterEditorScreen(
+                    viewModel = letterViewModel,
+                    onNavigateBack = { backStack.removeLastOrNull() }
+                )
+            }
+
+            entry<VernAiNavDestination.DocumentExplainer> {
+                val docViewModel: DocReaderViewModel = viewModel {
+                    DocReaderViewModel(
+                        repository = LocalDocumentRepository(app.database),
+                        dispatchers = app.dispatchers
+                    )
+                }
+                DocReaderScreen(
+                    viewModel = docViewModel,
+                    onNavigateBack = { backStack.removeLastOrNull() }
                 )
             }
 
@@ -50,64 +98,6 @@ fun VernAiNavigation() {
                     onNavigateBack = { backStack.removeLastOrNull() }
                 )
             }
-
-            entry<VernAiNavDestination.SalesLedger> {
-                PlaceholderFeatureScreen(
-                    title = "Structured Sales Ledger",
-                    description = "Feature implementation branch: feature/sales-log-extraction",
-                    onBack = { backStack.removeLastOrNull() }
-                )
-            }
-
-            entry<VernAiNavDestination.ComplaintDrafting> {
-                PlaceholderFeatureScreen(
-                    title = "Formal Complaint Drafting",
-                    description = "Feature implementation branch: feature/complaint-letter-generation",
-                    onBack = { backStack.removeLastOrNull() }
-                )
-            }
-
-            entry<VernAiNavDestination.DocumentExplainer> {
-                PlaceholderFeatureScreen(
-                    title = "Document Explainer & OCR",
-                    description = "Feature implementation branch: feature/document-explainer-ocr",
-                    onBack = { backStack.removeLastOrNull() }
-                )
-            }
         }
     )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun PlaceholderFeatureScreen(
-    title: String,
-    description: String,
-    onBack: () -> Unit
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
 }

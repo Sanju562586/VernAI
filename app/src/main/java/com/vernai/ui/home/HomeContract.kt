@@ -24,6 +24,13 @@ data class HomeUiState(
     val totalDocumentsRead: Int = 0,
     val features: List<FeatureCardItem> = listOf(
         FeatureCardItem(
+            id = "voice",
+            title = "Voice Workspace & Live ASR",
+            nativeSubtitle = "వాయిస్ వర్క్‌స్పేస్ (Voice Assistant)",
+            description = "Speak freely in Telugu/Indic; transcribe live and extract automated actions.",
+            destination = VernAiNavDestination.VoiceWorkspace
+        ),
+        FeatureCardItem(
             id = "sales",
             title = "Structured Sales Ledger",
             nativeSubtitle = "అమ్మకాల లాగ్ (Sales Log)",

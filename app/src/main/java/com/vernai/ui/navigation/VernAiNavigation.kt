@@ -43,7 +43,10 @@ fun VernAiNavigation() {
 
             entry<VernAiNavDestination.VoiceWorkspace> {
                 val voiceViewModel: VoiceWorkspaceViewModel = viewModel {
-                    VoiceWorkspaceViewModel(dispatchers = app.dispatchers)
+                    VoiceWorkspaceViewModel(
+                        asrEngine = app.asrEngine,
+                        dispatchers = app.dispatchers
+                    )
                 }
                 VoiceWorkspaceScreen(
                     viewModel = voiceViewModel,
@@ -55,6 +58,7 @@ fun VernAiNavigation() {
             entry<VernAiNavDestination.SalesLedger> {
                 val salesViewModel: SalesViewModel = viewModel {
                     SalesViewModel(
+                        asrEngine = app.asrEngine,
                         salesLogRepository = LocalSalesLogRepository(app.database),
                         dispatchers = app.dispatchers
                     )

@@ -412,4 +412,36 @@ class TeluguDocumentExportTests {
         assertTrue("Report PDF export must succeed", pdfResult is VernAiResult.Success)
         assertTrue(DocumentFileValidator.validatePdf(pdfDest).isValid)
     }
+
+    // =========================================================================
+    // 6. IQOO OFFICE KIT BRIDGE & EXPORT MANAGER TESTS
+    // =========================================================================
+
+    @Test
+    fun testIqooOfficeKitBridge_packageRegistry() {
+        val bridge = IqooOfficeKitBridge()
+        assertTrue(IqooOfficeKitBridge.OFFICE_KIT_PACKAGES.contains("com.vivo.office"))
+        assertTrue(IqooOfficeKitBridge.OFFICE_KIT_PACKAGES.contains("com.vivo.easyshare"))
+        assertTrue(IqooOfficeKitBridge.OFFICE_KIT_PACKAGES.contains("cn.wps.moffice_eng"))
+    }
+
+    @Test
+    fun testDocumentExportManager_fileNameSuggestions() {
+        val manager = DocumentExportManager()
+        val pdfName = manager.suggestFileName("Telugu_Letter", ExportFormat.PDF)
+        assertTrue(pdfName.startsWith("Telugu_Letter_"))
+        assertTrue(pdfName.endsWith(".pdf"))
+
+        val xlsxName = manager.suggestFileName("Sales_Ledger", ExportFormat.XLSX)
+        assertTrue(xlsxName.startsWith("Sales_Ledger_"))
+        assertTrue(xlsxName.endsWith(".xlsx"))
+
+        val docxName = manager.suggestFileName("Formal_Draft", ExportFormat.DOCX)
+        assertTrue(docxName.startsWith("Formal_Draft_"))
+        assertTrue(docxName.endsWith(".docx"))
+
+        val csvName = manager.suggestFileName("Sales_Log", ExportFormat.CSV)
+        assertTrue(csvName.startsWith("Sales_Log_"))
+        assertTrue(csvName.endsWith(".csv"))
+    }
 }

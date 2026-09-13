@@ -73,18 +73,42 @@ import com.vernai.ui.common.rememberAudioPermissionState
 @Composable
 fun LetterEditorScreen(
     viewModel: LetterEditorViewModel,
+    initialTranscript: String? = null,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
+    LaunchedEffect(initialTranscript) {
+        if (!initialTranscript.isNullOrBlank()) {
+            viewModel.handleIntent(LetterUiIntent.InitializeWithTranscript(initialTranscript))
+        }
+    }
+
     LaunchedEffect(viewModel) {
         viewModel.sideEffect.collect { effect ->
             when (effect) {
                 is LetterUiSideEffect.ShowToast -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 is LetterUiSideEffect.ShareExportedFile -> {
-                    Toast.makeText(context, "పత్రం సిద్ధమైంది: ${effect.file.name}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "పత్రం సిద్ధమైంది: ${effect.file.name}", Toast.LENGTH_SHORT).show()
+                    try {
+                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                            context,
+                            "${context.packageName}.fileprovider",
+                            effect.file
+                        )
+                        val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                            type = effect.mimeType
+                            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, state.subject.ifBlank { "Formal Telugu Civic Letter" })
+                            putExtra(android.content.Intent.EXTRA_TEXT, "VernAI ద్వారా సిద్ధం చేయబడిన అధికారిక వినతిపత్రం.")
+                            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, "వినతిపత్రం పంపండి / Share Letter"))
+                    } catch (e: Exception) {
+                        Toast.makeText(context, "షేర్ చేయడంలో లోపం: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
                 }
             }
         }
@@ -96,7 +120,7 @@ fun LetterEditorScreen(
                 title = {
                     Column {
                         Text("తెలుగు అధికారిక లేఖ (Letter Drafting)", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("Zero-Hallucination Local Civic AI", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Zero-Hallucination Local Civic AI • 100% Offline", fontSize = 12.sp, color = Color(0xFF0F766E))
                     }
                 },
                 navigationIcon = {
@@ -148,6 +172,54 @@ fun LetterEditorScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
+            // Live Generating Status & Cancellation Banner
+            if (state.isGenerating || state.isRegenerating) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                    shape = RoundedCornerShape(0.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "స్థానిక AI అధికారిక లేఖను రూపొందిస్తోంది...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        OutlinedButton(
+                            onClick = { viewModel.handleIntent(LetterUiIntent.CancelGeneration) }
+                        ) {
+                            Text("రద్దు చేయండి (Cancel)")
+                        }
+                    }
+                }
+            }
+
+            // Error Banner (if any)
+            if (state.errorMessage != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    shape = RoundedCornerShape(0.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = state.errorMessage ?: "",
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+            }
+
             // 3 Navigation Tabs
             TabRow(selectedTabIndex = state.activeTab) {
                 Tab(

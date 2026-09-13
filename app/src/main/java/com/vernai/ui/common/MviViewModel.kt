@@ -43,8 +43,11 @@ abstract class MviViewModel<S : UiState, I : UiIntent, E : UiSideEffect>(
     }
 
     protected fun sendSideEffect(effect: E) {
-        viewModelScope.launch {
-            _sideEffect.send(effect)
+        val result = _sideEffect.trySend(effect)
+        if (result.isFailure) {
+            viewModelScope.launch {
+                _sideEffect.send(effect)
+            }
         }
     }
 }

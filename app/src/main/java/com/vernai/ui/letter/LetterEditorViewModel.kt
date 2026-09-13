@@ -18,25 +18,42 @@ import com.vernai.domain.model.letter.LetterType
 import com.vernai.domain.repository.ComplaintRepository
 import com.vernai.domain.usecase.GenerateTeluguFormalLetterUseCase
 import com.vernai.ui.common.MviViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.UUID
 
 class LetterEditorViewModel(
     private val complaintRepository: ComplaintRepository? = null,
     private val llmEngine: LlmInferenceEngine = MockLlmInferenceEngine(),
     private val exporter: DocumentExporter = LocalDocumentExporter(),
-    private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
+    private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers(),
+    initialTranscript: String? = null
 ) : MviViewModel<LetterUiState, LetterUiIntent, LetterUiSideEffect>(LetterUiState()) {
+
+    private var generationJob: Job? = null
 
     private val generateLetterUseCase = GenerateTeluguFormalLetterUseCase(
         llmEngine = llmEngine,
-        repository = complaintRepository,
+        repository = null,
         dispatchers = dispatchers
     )
 
+    init {
+        val today = SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
+        setState { copy(date = today) }
+
+        if (!initialTranscript.isNullOrBlank()) {
+            handleInitializeWithTranscript(initialTranscript)
+        }
+    }
+
     override fun handleIntent(intent: LetterUiIntent) {
         when (intent) {
+            is LetterUiIntent.InitializeWithTranscript -> handleInitializeWithTranscript(intent.transcript)
             is LetterUiIntent.UpdateVoiceTranscript -> setState { copy(voiceTranscript = intent.transcript) }
             is LetterUiIntent.UpdateLetterType -> setState { copy(letterType = intent.letterType) }
             is LetterUiIntent.UpdateRecipientDesignation -> setState { copy(recipientDesignation = intent.designation) }
@@ -49,6 +66,7 @@ class LetterEditorViewModel(
 
             is LetterUiIntent.GenerateLetter -> generateLetter(isRegenerate = false)
             is LetterUiIntent.RegenerateLetter -> generateLetter(isRegenerate = true)
+            is LetterUiIntent.CancelGeneration -> cancelGeneration()
 
             is LetterUiIntent.UpdateSubject -> setState { copy(subject = intent.subject) }
             is LetterUiIntent.UpdateSalutation -> setState { copy(salutation = intent.salutation) }
@@ -68,14 +86,44 @@ class LetterEditorViewModel(
         }
     }
 
+    private fun handleInitializeWithTranscript(transcript: String) {
+        val clean = transcript.trim()
+        val facts = extractFactsFromTranscript(clean)
+        setState {
+            copy(
+                voiceTranscript = clean,
+                userFactsText = facts.joinToString("\n") { "- $it" },
+                isDraft = true,
+                isUserReviewed = false,
+                errorMessage = null
+            )
+        }
+        generateLetter(isRegenerate = false)
+    }
+
+    private fun cancelGeneration() {
+        generationJob?.cancel()
+        setState { copy(isGenerating = false, isRegenerating = false) }
+        sendSideEffect(LetterUiSideEffect.ShowToast("లేఖ రూపొందించడం రద్దు చేయబడింది (Generation cancelled)"))
+    }
+
+    private fun extractFactsFromTranscript(transcript: String): List<String> {
+        return transcript
+            .split(Regex("(?<=[.!?])|మరియు|అలాగే|\n|,"))
+            .map { it.trim().removePrefix("-").removePrefix("*").trim() }
+            .filter { it.isNotBlank() && it.length > 4 }
+            .ifEmpty { listOf(transcript.trim()) }
+    }
+
     private fun generateLetter(isRegenerate: Boolean) {
         if (isRegenerate) {
-            setState { copy(isRegenerating = true, isUserReviewed = false, isDraft = true) }
+            setState { copy(isRegenerating = true, isUserReviewed = false, isDraft = true, errorMessage = null) }
         } else {
-            setState { copy(isGenerating = true, isUserReviewed = false, isDraft = true) }
+            setState { copy(isGenerating = true, isUserReviewed = false, isDraft = true, errorMessage = null) }
         }
 
-        viewModelScope.launch(dispatchers.default) {
+        generationJob?.cancel()
+        generationJob = viewModelScope.launch(dispatchers.default) {
             val factsList = uiState.value.userFactsText
                 .lines()
                 .map { it.trim().removePrefix("-").removePrefix("*").trim() }
@@ -114,7 +162,8 @@ class LetterEditorViewModel(
                             preservedFacts = structured.preservedFacts,
                             isDraft = true,
                             isUserReviewed = false,
-                            activeTab = 1 // Automatically switch to Preview & Edit Tab
+                            activeTab = 1, // Automatically switch to Preview & Edit Tab
+                            errorMessage = null
                         )
                     }
                     val msg = if (isRegenerate) {
@@ -125,7 +174,7 @@ class LetterEditorViewModel(
                     sendSideEffect(LetterUiSideEffect.ShowToast(msg))
                 }
                 is VernAiResult.Error -> {
-                    setState { copy(isGenerating = false, isRegenerating = false) }
+                    setState { copy(isGenerating = false, isRegenerating = false, errorMessage = result.message) }
                     sendSideEffect(LetterUiSideEffect.ShowToast("Error: ${result.message}"))
                 }
                 is VernAiResult.Loading -> Unit
@@ -175,7 +224,10 @@ class LetterEditorViewModel(
     private fun exportLetter(format: ExportFormat, cacheDir: File) {
         setState { copy(isExporting = true) }
         viewModelScope.launch(dispatchers.io) {
-            val destination = File(cacheDir, "FormalLetter_${System.currentTimeMillis()}.${format.extension}")
+            val fileDate = uiState.value.date.ifBlank {
+                SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
+            }
+            val destination = File(cacheDir, "వినతిపత్రం_Complaint_$fileDate.${format.extension}")
             val finalSubject = if (!uiState.value.isUserReviewed) {
                 "[చిత్తు ప్రతి - ధృవీకరణ అవసరం] ${uiState.value.subject}"
             } else {

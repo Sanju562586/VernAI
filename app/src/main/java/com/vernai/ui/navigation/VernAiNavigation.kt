@@ -71,16 +71,18 @@ fun VernAiNavigation() {
                 )
             }
 
-            entry<VernAiNavDestination.ComplaintDrafting> {
+            entry<VernAiNavDestination.ComplaintDrafting> { destination ->
                 val letterViewModel: LetterEditorViewModel = viewModel {
                     LetterEditorViewModel(
                         complaintRepository = LocalComplaintRepository(app.database),
                         llmEngine = app.llmEngine,
-                        dispatchers = app.dispatchers
+                        dispatchers = app.dispatchers,
+                        initialTranscript = destination.initialTranscript
                     )
                 }
                 LetterEditorScreen(
                     viewModel = letterViewModel,
+                    initialTranscript = destination.initialTranscript,
                     onNavigateBack = { backStack.removeLastOrNull() }
                 )
             }

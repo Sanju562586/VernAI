@@ -14,10 +14,10 @@ sealed interface VernAiNavDestination : NavKey {
     data object Settings : VernAiNavDestination
 
     @Serializable
-    data object SalesLedger : VernAiNavDestination
+    data class SalesLedger(val initialTranscript: String? = null) : VernAiNavDestination
 
     @Serializable
-    data object ComplaintDrafting : VernAiNavDestination
+    data class ComplaintDrafting(val initialTranscript: String? = null) : VernAiNavDestination
 
     @Serializable
     data object DocumentExplainer : VernAiNavDestination

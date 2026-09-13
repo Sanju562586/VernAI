@@ -37,6 +37,7 @@ sealed interface VoiceUiIntent : UiIntent {
     data object ToggleRecording : VoiceUiIntent
     data object ResetState : VoiceUiIntent
     data object ProceedToIntentAction : VoiceUiIntent
+    data class SimulateSpeech(val text: String) : VoiceUiIntent
 }
 
 sealed interface VoiceUiSideEffect : UiSideEffect {

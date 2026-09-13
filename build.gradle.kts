@@ -4,3 +4,10 @@ plugins {
   alias(libs.plugins.compose.compiler) apply false
   alias(libs.plugins.kotlin.serialization) apply false
 }
+
+val externalBuildDir = System.getenv("LOCALAPPDATA")?.let { "$it/VernAI_build" }
+    ?: "${System.getProperty("user.home")}/.vernai_build"
+
+allprojects {
+    layout.buildDirectory.set(file("$externalBuildDir/${project.name}"))
+}

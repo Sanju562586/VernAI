@@ -62,10 +62,61 @@ class VoiceWorkspaceViewModel(
                 }
             }
             is VoiceUiIntent.ProceedToIntentAction -> {
+                val currentTranscript = uiState.value.liveTranscript.trim()
                 when (uiState.value.detectedIntent) {
-                    DetectedIntentType.SALES_RECORD -> sendSideEffect(VoiceUiSideEffect.NavigateTo(VernAiNavDestination.SalesLedger))
-                    DetectedIntentType.COMPLAINT_LETTER -> sendSideEffect(VoiceUiSideEffect.NavigateTo(VernAiNavDestination.ComplaintDrafting))
+                    DetectedIntentType.SALES_RECORD -> {
+                        sendSideEffect(VoiceUiSideEffect.NavigateTo(VernAiNavDestination.SalesLedger(currentTranscript.ifBlank { null })))
+                    }
+                    DetectedIntentType.COMPLAINT_LETTER -> {
+                        sendSideEffect(VoiceUiSideEffect.NavigateTo(VernAiNavDestination.ComplaintDrafting(currentTranscript.ifBlank { null })))
+                    }
                     else -> sendSideEffect(VoiceUiSideEffect.ShowToast("ఫలితం విజయవంతంగా రూపొందించబడింది (Result processed)"))
+                }
+            }
+            is VoiceUiIntent.SimulateSpeech -> {
+                recordingJob?.cancel()
+                timerJob?.cancel()
+                val spokenText = intent.text.trim()
+                val detected = if (spokenText.contains("అమ్మిన") || spokenText.contains("రూపాయలు") || spokenText.contains("కేజీ")) {
+                    DetectedIntentType.SALES_RECORD
+                } else {
+                    DetectedIntentType.COMPLAINT_LETTER
+                }
+
+                setState {
+                    copy(
+                        isRecording = false,
+                        stage = ProcessingStage.REASONING_LLM,
+                        liveTranscript = spokenText,
+                        detectedIntent = detected,
+                        errorMessage = null
+                    )
+                }
+
+                viewModelScope.launch(dispatchers.default) {
+                    val llmPrompt = if (detected == DetectedIntentType.SALES_RECORD) {
+                        "విశ్లేషించండి (Extract Sales items): $spokenText"
+                    } else {
+                        "వినతిపత్రం (Draft Complaint): $spokenText"
+                    }
+                    val llmResult = llmEngine.generateCompleteText(llmPrompt)
+
+                    val preview = if (llmResult is VernAiResult.Success && llmResult.data.isNotBlank()) {
+                        llmResult.data
+                    } else {
+                        if (detected == DetectedIntentType.SALES_RECORD) {
+                            "గుర్తించిన అమ్మకాలు (Sales Spoken):\n$spokenText\n\nలెడ్జర్ నమోదు కోసం సిద్ధంగా ఉంది."
+                        } else {
+                            "ఫిర్యాదు ముసాయిదా (Complaint Spoken):\n$spokenText\n\nస్థానిక AI ద్వారా అధికారిక వినతిపత్రంగా రూపొందించడానికి సిద్ధంగా ఉంది."
+                        }
+                    }
+
+                    setState {
+                        copy(
+                            stage = ProcessingStage.COMPLETED,
+                            extractedResultPreview = preview
+                        )
+                    }
                 }
             }
         }
@@ -76,7 +127,13 @@ class VoiceWorkspaceViewModel(
             // Stop recording -> Transition to LLM reasoning
             recordingJob?.cancel()
             timerJob?.cancel()
-            setState { copy(isRecording = false, stage = ProcessingStage.REASONING_LLM) }
+            val currentText = uiState.value.liveTranscript.trim()
+            val immediateDetected = if (currentText.contains("అమ్మిన") || currentText.contains("రూపాయలు") || currentText.contains("కేజీ")) {
+                DetectedIntentType.SALES_RECORD
+            } else {
+                DetectedIntentType.COMPLAINT_LETTER
+            }
+            setState { copy(isRecording = false, stage = ProcessingStage.REASONING_LLM, detectedIntent = immediateDetected) }
 
             viewModelScope.launch(dispatchers.default) {
                 // Ensure remaining buffer is flushed from ASR
@@ -84,7 +141,7 @@ class VoiceWorkspaceViewModel(
                 val finalPrompt = if (stopResult is VernAiResult.Success && stopResult.data.text.isNotBlank()) {
                     stopResult.data.text
                 } else {
-                    uiState.value.liveTranscript
+                    currentText
                 }
 
                 val detected = if (finalPrompt.contains("అమ్మిన") || finalPrompt.contains("రూపాయలు") || finalPrompt.contains("కేజీ")) {
@@ -103,12 +160,10 @@ class VoiceWorkspaceViewModel(
                 val preview = if (llmResult is VernAiResult.Success && llmResult.data.isNotBlank()) {
                     llmResult.data
                 } else {
-                    when (detected) {
-                        DetectedIntentType.SALES_RECORD ->
-                            "గుర్తించిన అమ్మకాలు (Sales Detected):\n• టమాటా: 5 kg = ₹200\n• నూనె ప్యాకెట్లు: 2 = ₹260\nమొత్తం: ₹460"
-                        DetectedIntentType.COMPLAINT_LETTER ->
-                            "ఫిర్యాదు ముసాయిదా (Complaint Draft):\nశాంతినగర్ పరిధిలో వీధి దీపాల సమస్య పరిష్కారం కోసం వినతిపత్రం."
-                        else -> "ఆడియో విశ్లేషణ పూర్తయింది."
+                    if (detected == DetectedIntentType.SALES_RECORD) {
+                        "గుర్తించిన అమ్మకాలు (Sales Spoken):\n$finalPrompt\n\nలెడ్జర్ నమోదు కోసం సిద్ధంగా ఉంది."
+                    } else {
+                        "ఫిర్యాదు ముసాయిదా (Complaint Spoken):\n$finalPrompt\n\nస్థానిక AI ద్వారా అధికారిక వినతిపత్రంగా రూపొందించడానికి సిద్ధంగా ఉంది."
                     }
                 }
 
@@ -139,6 +194,7 @@ class VoiceWorkspaceViewModel(
             timerJob = viewModelScope.launch(dispatchers.main) {
                 while (true) {
                     delay(1000)
+                    if (!uiState.value.isRecording) break
                     setState { copy(recordingDurationSec = recordingDurationSec + 1) }
                 }
             }
@@ -155,10 +211,29 @@ class VoiceWorkspaceViewModel(
                         setState { copy(errorMessage = friendlyMessage, isRecording = false, stage = ProcessingStage.IDLE) }
                     }
                     .collect { partial ->
-                        setState {
-                            copy(
-                                liveTranscript = partial.text
-                            )
+                        val currentText = partial.text
+                        if (partial.isFinal) {
+                            timerJob?.cancel()
+                            val text = currentText.trim()
+                            val detected = if (text.contains("అమ్మిన") || text.contains("రూపాయలు") || text.contains("కేజీ")) {
+                                DetectedIntentType.SALES_RECORD
+                            } else {
+                                DetectedIntentType.COMPLAINT_LETTER
+                            }
+                            setState {
+                                copy(
+                                    liveTranscript = text,
+                                    isRecording = false,
+                                    stage = ProcessingStage.REASONING_LLM,
+                                    detectedIntent = detected
+                                )
+                            }
+                        } else {
+                            setState {
+                                copy(
+                                    liveTranscript = currentText
+                                )
+                            }
                         }
                     }
             }

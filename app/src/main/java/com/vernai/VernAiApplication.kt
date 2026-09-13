@@ -30,9 +30,19 @@ class VernAiApplication : Application() {
         com.vernai.core.common.memory.AndroidMemoryPressureMonitor(this)
     }
 
+    val degradationManager: com.vernai.core.hardware.GracefulDegradationManager by lazy {
+        val profile = com.vernai.core.hardware.DeviceCapabilityProfiler(this).profileDevice()
+        com.vernai.core.hardware.GracefulDegradationManager(
+            context = this,
+            baseProfile = profile,
+            memoryMonitor = memoryMonitor
+        )
+    }
+
     val llmEngine: com.vernai.ai.llm.LlmInferenceEngine by lazy {
         com.vernai.ai.llm.LlamaCppInferenceEngine(
             memoryMonitor = memoryMonitor,
+            degradationManager = degradationManager,
             inferenceLock = inferenceLock,
             dispatchers = dispatchers
         )

@@ -35,14 +35,14 @@ data class HomeUiState(
             title = "Structured Sales Ledger",
             nativeSubtitle = "అమ్మకాల లాగ్ (Sales Log)",
             description = "Speak daily transactions; auto-extract to typed ledger & export to PDF/DOCX.",
-            destination = VernAiNavDestination.SalesLedger
+            destination = VernAiNavDestination.SalesLedger()
         ),
         FeatureCardItem(
             id = "complaint",
             title = "Formal Complaint Drafting",
             nativeSubtitle = "ఫిర్యాదు పత్రం (Complaint Letter)",
             description = "Draft administrative complaints in regional language with English translation.",
-            destination = VernAiNavDestination.ComplaintDrafting
+            destination = VernAiNavDestination.ComplaintDrafting()
         ),
         FeatureCardItem(
             id = "doc",

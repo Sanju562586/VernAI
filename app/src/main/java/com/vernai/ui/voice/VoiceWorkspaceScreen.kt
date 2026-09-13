@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,6 +44,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -156,6 +158,37 @@ fun VoiceWorkspaceScreen(
                     }
                 }
             )
+
+            // Quick Spoken Complaint Suggestions for instant demo & testing
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Text(
+                    text = "త్వరిత తెలుగు సమస్యలు (Quick Telugu Complaints):",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val suggestions = listOf(
+                        "మా గ్రామంలో గత 10 రోజులుగా వీధి దీపాలు వెలగడం లేదు, తాగునీటి పైప్‌లైన్ పగిలిపోయింది" to "వీధి దీపాలు & తాగునీరు",
+                        "రామపురం ప్రాథమిక ఆరోగ్య కేంద్రంలో డాక్టర్లు లేక ప్రజలు తీవ్ర ఇబ్బందులు పడుతున్నారు" to "ఆరోగ్య కేంద్రం సమస్య",
+                        "భారీ వర్షాల వలన పంట పొలాలు మునిగిపోయాయి, రైతులకు తక్షణ నష్టపరిహారం అందించాలి" to "పంట నష్టపరిహారం"
+                    )
+                    suggestions.forEach { (text, label) ->
+                        SuggestionChip(
+                            onClick = { viewModel.handleIntent(VoiceUiIntent.SimulateSpeech(text)) },
+                            label = { Text(label, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
 
             // Live Transcription Card
             LiveTranscriptCard(state = state)

@@ -19,6 +19,7 @@ import com.vernai.ui.sales.SalesLogScreen
 import com.vernai.ui.sales.SalesViewModel
 import com.vernai.ui.settings.SettingsScreen
 import com.vernai.ui.settings.SettingsViewModel
+import com.vernai.ai.llm.benchmark.LlmBenchmarkRunner
 import com.vernai.ui.voice.VoiceWorkspaceScreen
 import com.vernai.ui.voice.VoiceWorkspaceViewModel
 
@@ -98,7 +99,15 @@ fun VernAiNavigation() {
             }
 
             entry<VernAiNavDestination.Settings> {
-                val settingsViewModel: SettingsViewModel = viewModel()
+                val settingsViewModel: SettingsViewModel = viewModel {
+                    SettingsViewModel(
+                        benchmarkRunner = LlmBenchmarkRunner(
+                            context = app,
+                            engine = app.llmEngine,
+                            dispatchers = app.dispatchers
+                        )
+                    )
+                }
                 SettingsScreen(
                     viewModel = settingsViewModel,
                     onNavigateBack = { backStack.removeLastOrNull() }

@@ -1,5 +1,6 @@
 package com.vernai.ai.llm
 
+import com.vernai.ai.llm.benchmark.ExecutionBackend
 import com.vernai.core.common.result.VernAiResult
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
@@ -60,11 +61,13 @@ interface LlmInferenceEngine : AutoCloseable {
      * Loads a GGUF model file into native memory using mmap.
      * @param contextLength Maximum sequence context (e.g. 2048).
      * @param nThreads Number of CPU execution threads (recommended: 4 for Snapdragon Performance cores).
+     * @param backend Acceleration backend (CPU_NEON, GPU_VULKAN, or NPU_QUALCOMM_QNN).
      */
     suspend fun loadModel(
         modelFile: File,
         contextLength: Int = 2048,
-        nThreads: Int = 4
+        nThreads: Int = 4,
+        backend: ExecutionBackend = ExecutionBackend.CPU_NEON
     ): VernAiResult<Unit>
 
     /**

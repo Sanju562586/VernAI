@@ -14,12 +14,14 @@ private data class RawSalesJson(
 
 @Serializable
 private data class RawSalesItem(
+    val date: String = "",
     val original_term: String = "",
     val standard_name: String = "",
     val quantity: Double = 0.0,
     val unit: String = "unit",
     val unit_price: Double = 0.0,
-    val total_price: Double = 0.0
+    val total_price: Double = 0.0,
+    val notes: String? = null
 )
 
 /**
@@ -42,25 +44,28 @@ class SalesLogParser {
             json.decodeFromString<RawSalesJson>(cleanJson)
         }.getOrDefault(RawSalesJson())
 
-        val domainItems = parsed.items.map { raw ->
-            val computedTotal = if (raw.total_price > 0.0) raw.total_price else raw.quantity * raw.unit_price
-            SalesItem(
+        val rawItems = parsed.items.map { raw ->
+            val rawItem = SalesItem(
                 id = UUID.randomUUID().toString(),
-                originalTerm = raw.original_term.ifBlank { "Item" },
+                date = raw.date,
+                originalTerm = raw.original_term.ifBlank { "వస్తువు" },
                 standardName = raw.standard_name.ifBlank { raw.original_term },
                 quantity = raw.quantity,
                 unit = raw.unit,
                 unitPrice = raw.unit_price,
-                totalPrice = computedTotal
+                totalPrice = raw.total_price,
+                notes = raw.notes
             )
+            com.vernai.sales.processing.SalesArithmeticValidator.validateAndReconcile(rawItem).item
         }
 
-        val grandTotal = domainItems.sumOf { it.totalPrice }
+        val checkedItems = com.vernai.sales.processing.DuplicatePreventionEngine.flagDuplicates(rawItems)
+        val grandTotal = checkedItems.sumOf { it.totalPrice }
 
         return SalesLog(
             rawSpokenText = spokenTranscript,
             detectedLanguage = language,
-            items = domainItems,
+            items = checkedItems,
             grandTotal = grandTotal
         )
     }

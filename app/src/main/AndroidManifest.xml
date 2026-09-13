@@ -6,6 +6,30 @@
 
     <!-- ZERO INTERNET PERMISSION: Enforces offline-first security perimeter -->
 
+    <!-- Package visibility queries for iQOO / vivo Office Kit and document viewers -->
+    <queries>
+        <package android:name="com.vivo.office" />
+        <package android:name="com.vivo.easyshare" />
+        <package android:name="com.vivo.assistant" />
+        <package android:name="cn.wps.moffice_eng" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/pdf" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="text/csv" />
+        </intent>
+    </queries>
+
     <application
         android:name=".VernAiApplication"
         android:allowBackup="false"
@@ -26,6 +50,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

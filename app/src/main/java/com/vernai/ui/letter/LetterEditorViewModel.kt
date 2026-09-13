@@ -60,15 +60,19 @@ class LetterEditorViewModel(
             is LetterUiIntent.SwitchTab -> setState { copy(activeTab = intent.tabIndex) }
             is LetterUiIntent.SaveLetterDraft -> saveDraft()
             is LetterUiIntent.ExportDocument -> exportLetter(intent.format, intent.cacheDir)
+            is LetterUiIntent.RequestExport -> handleExportRequest(intent.format, intent.cacheDir)
+            is LetterUiIntent.SetUserReviewed -> setState { copy(isUserReviewed = intent.isReviewed) }
+            is LetterUiIntent.ConfirmReviewAndExport -> confirmReviewAndExport()
+            is LetterUiIntent.DismissReviewDialog -> setState { copy(showReviewDialog = false, pendingExportFormat = null) }
             is LetterUiIntent.LoadSampleFacts -> loadSampleFacts()
         }
     }
 
     private fun generateLetter(isRegenerate: Boolean) {
         if (isRegenerate) {
-            setState { copy(isRegenerating = true) }
+            setState { copy(isRegenerating = true, isUserReviewed = false, isDraft = true) }
         } else {
-            setState { copy(isGenerating = true) }
+            setState { copy(isGenerating = true, isUserReviewed = false, isDraft = true) }
         }
 
         viewModelScope.launch(dispatchers.default) {
@@ -108,6 +112,8 @@ class LetterEditorViewModel(
                             signaturePlaceholder = "${structured.signaturePlaceholders.signatureLine}\n(${structured.signaturePlaceholders.applicantName})",
                             englishTranslation = structured.englishTranslation,
                             preservedFacts = structured.preservedFacts,
+                            isDraft = true,
+                            isUserReviewed = false,
                             activeTab = 1 // Automatically switch to Preview & Edit Tab
                         )
                     }
@@ -125,6 +131,24 @@ class LetterEditorViewModel(
                 is VernAiResult.Loading -> Unit
             }
         }
+    }
+
+    private var pendingExportCacheDir: File? = null
+
+    private fun handleExportRequest(format: ExportFormat, cacheDir: File) {
+        pendingExportCacheDir = cacheDir
+        if (uiState.value.isUserReviewed) {
+            exportLetter(format, cacheDir)
+        } else {
+            setState { copy(showReviewDialog = true, pendingExportFormat = format) }
+        }
+    }
+
+    private fun confirmReviewAndExport() {
+        val format = uiState.value.pendingExportFormat ?: ExportFormat.PDF
+        val cacheDir = pendingExportCacheDir ?: File(".")
+        setState { copy(isUserReviewed = true, showReviewDialog = false) }
+        exportLetter(format, cacheDir)
     }
 
     private fun saveDraft() {
@@ -152,11 +176,21 @@ class LetterEditorViewModel(
         setState { copy(isExporting = true) }
         viewModelScope.launch(dispatchers.io) {
             val destination = File(cacheDir, "FormalLetter_${System.currentTimeMillis()}.${format.extension}")
+            val finalSubject = if (!uiState.value.isUserReviewed) {
+                "[చిత్తు ప్రతి - ధృవీకరణ అవసరం] ${uiState.value.subject}"
+            } else {
+                uiState.value.subject
+            }
+            val finalBody = if (!uiState.value.isUserReviewed) {
+                "*** [చిత్తు ప్రతి - ధృవీకరణ అవసరం / DRAFT - VERIFICATION REQUIRED] ***\n\n" + uiState.value.vernacularBody
+            } else {
+                uiState.value.vernacularBody
+            }
             val draft = ComplaintDraft(
-                subject = uiState.value.subject,
+                subject = finalSubject,
                 department = uiState.value.recipientDepartment,
                 recipientDesignation = uiState.value.recipientDesignation,
-                vernacularBody = uiState.value.vernacularBody,
+                vernacularBody = finalBody,
                 englishTranslation = uiState.value.englishTranslation,
                 targetLanguage = Language.TELUGU,
                 senderName = uiState.value.applicantName.ifBlank { null },

@@ -27,9 +27,12 @@ import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,14 +55,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vernai.document.export.ExportFormat
 import com.vernai.domain.model.letter.LetterType
+import com.vernai.ui.common.rememberAudioPermissionState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -121,12 +129,20 @@ fun LetterEditorScreen(
                 onGenerate = { viewModel.handleIntent(LetterUiIntent.GenerateLetter) },
                 onRegenerate = { viewModel.handleIntent(LetterUiIntent.RegenerateLetter) },
                 onSave = { viewModel.handleIntent(LetterUiIntent.SaveLetterDraft) },
-                onExportPdf = { viewModel.handleIntent(LetterUiIntent.ExportDocument(ExportFormat.PDF, context.cacheDir)) },
-                onExportDocx = { viewModel.handleIntent(LetterUiIntent.ExportDocument(ExportFormat.DOCX, context.cacheDir)) }
+                onExportPdf = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.PDF, context.cacheDir)) },
+                onExportDocx = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.DOCX, context.cacheDir)) }
             )
         },
         modifier = modifier
     ) { innerPadding ->
+        if (state.showReviewDialog) {
+            LetterReviewConfirmationDialog(
+                state = state,
+                onConfirm = { viewModel.handleIntent(LetterUiIntent.ConfirmReviewAndExport) },
+                onDismiss = { viewModel.handleIntent(LetterUiIntent.DismissReviewDialog) }
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -166,6 +182,11 @@ fun LetterInputsTabContent(
     state: LetterUiState,
     viewModel: LetterEditorViewModel
 ) {
+    val context = LocalContext.current
+    val audioPermissionState = rememberAudioPermissionState {
+        Toast.makeText(context, "వాయిస్ రికార్డింగ్ సిద్ధం (Microphone Ready)", Toast.LENGTH_SHORT).show()
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -238,6 +259,15 @@ fun LetterInputsTabContent(
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateVoiceTranscript(it)) },
             label = { Text("వాయిస్ ట్రాన్స్‌క్రిప్ట్ / సమస్య వివరణ (Voice Transcript)") },
             leadingIcon = { Icon(imageVector = Icons.Default.Mic, contentDescription = null) },
+            trailingIcon = {
+                IconButton(onClick = { audioPermissionState.requestPermission() }) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Microphone Consent",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            },
             modifier = Modifier.fillMaxWidth(),
             minLines = 2,
             shape = RoundedCornerShape(12.dp)
@@ -347,6 +377,48 @@ fun LetterTeluguPreviewTabContent(
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Spacer(modifier = Modifier.height(4.dp))
+
+        // Anti-Hallucination Draft & Verification Watermark Banner
+        OutlinedCard(
+            colors = CardDefaults.outlinedCardColors(
+                containerColor = if (state.isUserReviewed) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
+            ),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier.padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (state.isUserReviewed) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
+                    contentDescription = null,
+                    tint = if (state.isUserReviewed) Color(0xFF16A34A) else Color(0xFFDC2626),
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = if (state.isUserReviewed) "ధృవీకరించబడింది (Reviewed & Verified)" else "[చిత్తు ప్రతి - ధృవీకరణ అవసరం] Draft Copy",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp,
+                        color = if (state.isUserReviewed) Color(0xFF15803D) else Color(0xFFB91C1C)
+                    )
+                    Text(
+                        text = if (state.isUserReviewed) "మీరు ఈ లేఖలోని వాస్తవాలను సరిచూశారు. అధికారిక సమర్పణకు సిద్ధం."
+                               else "ఇది స్థానిక AI రూపొందించిన చిత్తు ప్రతి. ఎగుమతి చేయడానికి ముందు దరఖాస్తుదారుడి పేర్లు, తేదీలు మరియు వాస్తవాలను సరిచూడండి.",
+                        fontSize = 11.sp,
+                        color = if (state.isUserReviewed) Color(0xFF166534) else Color(0xFF991B1B)
+                    )
+                }
+                Spacer(modifier = Modifier.width(6.dp))
+                FilterChip(
+                    selected = state.isUserReviewed,
+                    onClick = { viewModel.handleIntent(LetterUiIntent.SetUserReviewed(!state.isUserReviewed)) },
+                    label = { Text(if (state.isUserReviewed) "ధృవీకరించబడింది ✓" else "సరిచూడండి ⚠️", fontSize = 11.sp) }
+                )
+            }
+        }
 
         // Preserved Facts Verification Card
         if (state.preservedFacts.isNotEmpty()) {
@@ -560,4 +632,98 @@ fun LetterBottomActionBar(
             }
         }
     }
+}
+
+@Composable
+fun LetterReviewConfirmationDialog(
+    state: LetterUiState,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var confirmed by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Security,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+        },
+        title = {
+            Text(
+                "లేఖ సమీక్ష మరియు ధృవీకరణ\n(Review Required Before Export)",
+                fontWeight = FontWeight.Bold,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+            ) {
+                Text(
+                    text = "భద్రతా నిబంధన: కల్పిత సమాచారం (LLM Hallucinations) నివారణకు, ఎగుమతికి ముందు మీ వాస్తవాలను తప్పక సరిచూడాలి.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text("సరిచూడవలసిన వివరాలు (Key Facts to Verify):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("• దరఖాస్తుదారు: ${state.applicantName.ifBlank { "పేరు నమోదు కాలేదు [Placeholders used]" }}", fontSize = 11.sp)
+                        Text("• అధికారి/కార్యాలయం: ${state.recipientDesignation}, ${state.recipientDepartment}", fontSize = 11.sp)
+                        Text("• తేదీ & స్థలం: ${state.date} | ${state.location}", fontSize = 11.sp)
+                        if (state.preservedFacts.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text("• పొందుపరచిన వాస్తవాలు:", fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
+                            state.preservedFacts.forEach { fact ->
+                                Text("   - $fact", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Checkbox(
+                        checked = confirmed,
+                        onCheckedChange = { confirmed = it }
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "నేను ఈ లేఖలోని వాస్తవాలను పూర్తిగా సరిచూశాను. ఎటువంటి కల్పితాలు లేవని ధృవీకరిస్తున్నాను.",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                enabled = confirmed
+            ) {
+                Text("సరిచూశాను & ఎగుమతి చేయి (Confirm & Export)")
+            }
+        },
+        dismissButton = {
+            OutlinedButton(onClick = onDismiss) {
+                Text("మరిన్ని సవరణలు (Edit Draft)")
+            }
+        }
+    )
 }

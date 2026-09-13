@@ -81,6 +81,7 @@ import androidx.compose.ui.window.Dialog
 import com.vernai.core.model.SalesItem
 import com.vernai.core.model.SalesValidationStatus
 import com.vernai.document.export.ExportFormat
+import com.vernai.ui.common.rememberAudioPermissionState
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -99,6 +100,10 @@ fun SalesLogScreen(
     var showAddItemDialog by remember { mutableStateOf(false) }
     var itemToEdit by remember { mutableStateOf<SalesItem?>(null) }
     var showExportMenu by remember { mutableStateOf(false) }
+
+    val audioPermissionState = rememberAudioPermissionState {
+        viewModel.handleIntent(SalesUiIntent.ToggleRecording)
+    }
 
     LaunchedEffect(viewModel) {
         viewModel.sideEffect.collect { effect ->
@@ -228,7 +233,13 @@ fun SalesLogScreen(
                     isRecording = state.isRecording,
                     isProcessing = state.isProcessing,
                     spokenTranscript = state.spokenTranscript,
-                    onToggleRecord = { viewModel.handleIntent(SalesUiIntent.ToggleRecording) }
+                    onToggleRecord = {
+                        if (state.isRecording) {
+                            viewModel.handleIntent(SalesUiIntent.ToggleRecording)
+                        } else {
+                            audioPermissionState.requestPermission()
+                        }
+                    }
                 )
             }
 

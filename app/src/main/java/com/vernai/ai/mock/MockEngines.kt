@@ -2,6 +2,7 @@ package com.vernai.ai.mock
 
 import com.vernai.ai.asr.AsrEngine
 import com.vernai.ai.asr.AsrState
+import com.vernai.ai.llm.benchmark.ExecutionBackend
 import com.vernai.ai.llm.GenerationParameters
 import com.vernai.ai.llm.LlmEngineState
 import com.vernai.ai.llm.LlmInferenceEngine
@@ -109,7 +110,12 @@ class MockLlmInferenceEngine : LlmInferenceEngine {
     private val _state = MutableStateFlow<LlmEngineState>(LlmEngineState.Ready)
     override val state: StateFlow<LlmEngineState> = _state.asStateFlow()
 
-    override suspend fun loadModel(modelFile: File, contextLength: Int, nThreads: Int): VernAiResult<Unit> {
+    override suspend fun loadModel(
+        modelFile: File,
+        contextLength: Int,
+        nThreads: Int,
+        backend: ExecutionBackend
+    ): VernAiResult<Unit> {
         _state.value = LlmEngineState.Ready
         return VernAiResult.Success(Unit)
     }

@@ -1,5 +1,6 @@
 package com.vernai.ai.llm.llama
 
+import com.vernai.ai.llm.benchmark.ExecutionBackend
 import java.io.File
 
 /**
@@ -12,5 +13,6 @@ data class LlamaModelConfig(
     val nBatch: Int = 512,  // Logical batch size for prompt pre-fill processing
     val useMmap: Boolean = true, // Demand-paged memory mapping prevents premature OS out-of-memory
     val useMlock: Boolean = false, // Must remain false on Android to prevent system freezing under pressure
-    val nGpuLayers: Int = 0 // Baseline CPU NEON execution provider (0 GPU offload)
+    val nGpuLayers: Int = 0, // Baseline CPU NEON execution provider (0 GPU offload)
+    val backend: ExecutionBackend = ExecutionBackend.CPU_NEON
 )

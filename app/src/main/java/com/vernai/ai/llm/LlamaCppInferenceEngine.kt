@@ -1,6 +1,7 @@
 package com.vernai.ai.llm
 
 import android.util.Log
+import com.vernai.ai.llm.benchmark.ExecutionBackend
 import com.vernai.ai.llm.llama.LlamaBridge
 import com.vernai.ai.llm.llama.LlamaModelConfig
 import com.vernai.ai.parser.IndicPromptTemplate
@@ -49,6 +50,9 @@ class LlamaCppInferenceEngine(
     private var activeConfig: LlamaModelConfig? = null
     private var isEngineReady: Boolean = false
 
+    var activeBackend: ExecutionBackend = ExecutionBackend.CPU_NEON
+        private set
+
     private val scope = CoroutineScope(dispatchers.llmInference)
     private var memoryObserverJob: Job? = null
 
@@ -69,7 +73,8 @@ class LlamaCppInferenceEngine(
     override suspend fun loadModel(
         modelFile: File,
         contextLength: Int,
-        nThreads: Int
+        nThreads: Int,
+        backend: ExecutionBackend
     ): VernAiResult<Unit> = withContext(dispatchers.llmInference) {
         // 1. Validate File Existence
         if (!modelFile.exists() || !modelFile.canRead()) {
@@ -98,26 +103,48 @@ class LlamaCppInferenceEngine(
         inferenceLock.withLlmLock {
             _state.value = LlmEngineState.Loading(progressPercent = 10)
 
+            val effectiveGpuLayers = when (backend) {
+                ExecutionBackend.CPU_NEON -> 0
+                ExecutionBackend.GPU_VULKAN -> 32
+                ExecutionBackend.NPU_QUALCOMM_QNN -> {
+                    Log.w("VernAI-LLM", "Hexagon NPU requires pre-compiled QNN serialized context. Falling back to CPU NEON for GGUF model.")
+                    0
+                }
+            }
+
             val config = LlamaModelConfig(
                 modelFile = modelFile,
                 contextLength = contextLength.coerceIn(512, 4096),
                 nThreads = nThreads.coerceIn(1, 8),
                 useMmap = true,
                 useMlock = false,
-                nGpuLayers = 0 // Baseline CPU NEON execution provider
+                nGpuLayers = effectiveGpuLayers,
+                backend = if (backend == ExecutionBackend.NPU_QUALCOMM_QNN) ExecutionBackend.CPU_NEON else backend
             )
 
             try {
                 _state.value = LlmEngineState.Loading(progressPercent = 40)
 
                 if (llamaBridge.isNativeLoaded) {
-                    val ptr = llamaBridge.loadModel(
+                    var ptr = llamaBridge.loadModel(
                         modelPath = config.modelFile.absolutePath,
                         contextLength = config.contextLength,
                         nThreads = config.nThreads,
                         nBatch = config.nBatch,
                         useMmap = config.useMmap
                     )
+
+                    // Fallback to CPU NEON if GPU initialization fails
+                    if (ptr == 0L && backend == ExecutionBackend.GPU_VULKAN) {
+                        Log.w("VernAI-LLM", "Vulkan GPU initialization failed. Falling back to CPU NEON.")
+                        ptr = llamaBridge.loadModel(
+                            modelPath = config.modelFile.absolutePath,
+                            contextLength = config.contextLength,
+                            nThreads = config.nThreads,
+                            nBatch = config.nBatch,
+                            useMmap = config.useMmap
+                        )
+                    }
 
                     if (ptr != 0L) {
                         nativeContextPtr = ptr
@@ -128,6 +155,7 @@ class LlamaCppInferenceEngine(
                 delay(100)
 
                 activeConfig = config
+                activeBackend = config.backend
                 isEngineReady = true
                 _state.value = LlmEngineState.Ready
                 VernAiResult.Success(Unit)

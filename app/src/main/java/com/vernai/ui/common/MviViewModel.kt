@@ -28,6 +28,7 @@ abstract class MviViewModel<S : UiState, I : UiIntent, E : UiSideEffect>(
 
     private val _uiState = MutableStateFlow(initialState)
     val uiState: StateFlow<S> = _uiState.asStateFlow()
+    protected val currentState: S get() = _uiState.value
 
     private val _sideEffect = Channel<E>(Channel.BUFFERED)
     val sideEffect = _sideEffect.receiveAsFlow()

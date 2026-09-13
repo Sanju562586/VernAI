@@ -2,7 +2,6 @@ package com.vernai.ui.letter
 
 import androidx.lifecycle.viewModelScope
 import com.vernai.ai.llm.LlmInferenceEngine
-import com.vernai.ai.mock.MockDocumentExporter
 import com.vernai.ai.mock.MockLlmInferenceEngine
 import com.vernai.core.common.dispatchers.DefaultVernAiDispatchers
 import com.vernai.core.common.dispatchers.VernAiDispatchers
@@ -12,6 +11,7 @@ import com.vernai.core.model.Language
 import com.vernai.document.export.DocumentExporter
 import com.vernai.document.export.ExportConfig
 import com.vernai.document.export.ExportFormat
+import com.vernai.document.export.LocalDocumentExporter
 import com.vernai.domain.model.letter.LetterInput
 import com.vernai.domain.model.letter.LetterRecipient
 import com.vernai.domain.model.letter.LetterType
@@ -25,7 +25,7 @@ import java.util.UUID
 class LetterEditorViewModel(
     private val complaintRepository: ComplaintRepository? = null,
     private val llmEngine: LlmInferenceEngine = MockLlmInferenceEngine(),
-    private val exporter: DocumentExporter = MockDocumentExporter(),
+    private val exporter: DocumentExporter = LocalDocumentExporter(),
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
 ) : MviViewModel<LetterUiState, LetterUiIntent, LetterUiSideEffect>(LetterUiState()) {
 

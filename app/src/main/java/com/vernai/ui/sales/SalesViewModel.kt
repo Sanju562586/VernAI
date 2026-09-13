@@ -3,7 +3,6 @@ package com.vernai.ui.sales
 import androidx.lifecycle.viewModelScope
 import com.vernai.ai.asr.AsrEngine
 import com.vernai.ai.mock.MockAsrEngine
-import com.vernai.ai.mock.MockDocumentExporter
 import com.vernai.ai.mock.MockLlmInferenceEngine
 import com.vernai.ai.parser.SalesLogParser
 import com.vernai.core.common.dispatchers.DefaultVernAiDispatchers
@@ -17,6 +16,7 @@ import com.vernai.core.model.SalesValidationStatus
 import com.vernai.document.export.DocumentExporter
 import com.vernai.document.export.ExportConfig
 import com.vernai.document.export.ExportFormat
+import com.vernai.document.export.LocalDocumentExporter
 import com.vernai.document.export.SalesLedgerExporter
 import com.vernai.domain.repository.SalesLogRepository
 import com.vernai.domain.usecase.ExtractSalesLogUseCase
@@ -36,7 +36,7 @@ import java.util.Locale
 class SalesViewModel(
     private val asrEngine: AsrEngine = MockAsrEngine(),
     private val salesLogRepository: SalesLogRepository? = null,
-    private val exporter: DocumentExporter = MockDocumentExporter(),
+    private val exporter: DocumentExporter = LocalDocumentExporter(),
     private val ledgerExporter: SalesLedgerExporter = SalesLedgerExporter(),
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
 ) : MviViewModel<SalesUiState, SalesUiIntent, SalesUiSideEffect>(

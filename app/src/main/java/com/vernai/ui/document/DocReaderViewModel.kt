@@ -1,8 +1,9 @@
 package com.vernai.ui.document
 
 import androidx.lifecycle.viewModelScope
+import com.vernai.ai.llm.LlmInferenceEngine
 import com.vernai.ai.mock.MockDocumentExporter
-import com.vernai.ai.mock.MockDocumentProcessor
+import com.vernai.ai.mock.MockLlmInferenceEngine
 import com.vernai.core.common.dispatchers.DefaultVernAiDispatchers
 import com.vernai.core.common.dispatchers.VernAiDispatchers
 import com.vernai.core.common.result.VernAiResult
@@ -11,93 +12,209 @@ import com.vernai.core.model.Language
 import com.vernai.document.export.DocumentExporter
 import com.vernai.document.export.ExportConfig
 import com.vernai.document.export.ExportFormat
-import com.vernai.document.processing.DocumentProcessor
+import com.vernai.document.processing.DocumentChunk
+import com.vernai.document.processing.DocumentChunker
+import com.vernai.document.processing.DocumentLimitationsAnalyzer
+import com.vernai.document.processing.ExtractedDocument
+import com.vernai.document.processing.OfflineDocumentProcessorImpl
+import com.vernai.document.processing.TestDocumentType
+import com.vernai.document.processing.TestDocuments
 import com.vernai.domain.repository.DocumentRepository
+import com.vernai.domain.usecase.ExplainDocumentUseCase
 import com.vernai.ui.common.MviViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.UUID
 
 class DocReaderViewModel(
-    private val processor: DocumentProcessor = MockDocumentProcessor(),
+    private val processor: OfflineDocumentProcessorImpl = OfflineDocumentProcessorImpl(),
+    private val chunker: DocumentChunker = DocumentChunker(),
+    private val llmEngine: LlmInferenceEngine = MockLlmInferenceEngine(),
     private val exporter: DocumentExporter = MockDocumentExporter(),
     private val repository: DocumentRepository? = null,
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
 ) : MviViewModel<DocReaderUiState, DocReaderUiIntent, DocReaderUiSideEffect>(DocReaderUiState()) {
 
+    private val explainUseCase = ExplainDocumentUseCase(
+        llmEngine = llmEngine,
+        repository = repository,
+        dispatchers = dispatchers
+    )
+
     init {
         // Load initial default sample
-        handleIntent(DocReaderUiIntent.ImportSampleDocument("revenue_notice"))
+        handleIntent(DocReaderUiIntent.ImportTestDocument(TestDocumentType.REVENUE_PATTADAR_NOTICE))
     }
 
     override fun handleIntent(intent: DocReaderUiIntent) {
         when (intent) {
             is DocReaderUiIntent.ChangeLanguage -> setState { copy(activeLanguage = intent.language) }
             is DocReaderUiIntent.ToggleRawText -> setState { copy(showRawText = !showRawText) }
-            is DocReaderUiIntent.ImportSampleDocument -> importSample(intent.sampleType)
-            is DocReaderUiIntent.ProcessDocumentExplanation -> summarizeDocument()
+            is DocReaderUiIntent.ImportTestDocument -> importTestDocument(intent.type)
+            is DocReaderUiIntent.PickDocumentFile -> processPickedBytes(intent.fileName, intent.mimeType, intent.bytes)
+            is DocReaderUiIntent.SelectChunk -> setState { copy(selectedChunk = intent.chunk, selectedSnippetExplanation = null) }
+            is DocReaderUiIntent.ExplainSelectedChunk -> explainChunk(intent.chunk)
+            is DocReaderUiIntent.ClearSelectedSnippet -> setState { copy(selectedSnippetExplanation = null, selectedChunk = null) }
+            is DocReaderUiIntent.ProcessDocumentExplanation -> summarizeCurrentDocument()
             is DocReaderUiIntent.ExportExplanation -> exportExplanation(intent.cacheDir)
+            is DocReaderUiIntent.ClearError -> setState { copy(extractionError = null) }
         }
     }
 
-    private fun importSample(type: String) {
-        setState { copy(isExtracting = true, explanationReport = null) }
+    private fun processPickedBytes(fileName: String, mimeType: String, bytes: ByteArray) {
+        setState {
+            copy(
+                isExtracting = true,
+                extractionError = null,
+                explanationReport = null,
+                selectedChunk = null,
+                selectedSnippetExplanation = null,
+                importedDocumentName = fileName
+            )
+        }
+
         viewModelScope.launch(dispatchers.io) {
-            val fileName = when (type) {
-                "electricity" -> "విద్యుత్ బోర్డు నోటీసు (TSSPDCL Notice.pdf)"
-                else -> "పట్టాదార్ పాస్ పుస్తకం నోటీసు (Revenue Notice.pdf)"
-            }
-            val result = processor.extractText(File(fileName), uiState.value.activeLanguage)
+            val result = processor.extractFromBytes(fileName, mimeType, bytes, uiState.value.activeLanguage)
             when (result) {
                 is VernAiResult.Success -> {
+                    val extracted = result.data
+                    val chunks = chunker.chunkDocument(extracted.rawText)
+                    val quality = DocumentLimitationsAnalyzer.analyze(
+                        rawText = extracted.rawText,
+                        isScanned = extracted.isScannedImage,
+                        language = extracted.detectedLanguage
+                    )
+
                     setState {
                         copy(
                             isExtracting = false,
-                            importedDocumentName = fileName,
-                            extractedDocument = result.data
+                            extractedDocument = extracted,
+                            chunks = chunks,
+                            qualityReport = quality
                         )
                     }
-                    summarizeDocument()
+                    summarizeCurrentDocument()
                 }
                 is VernAiResult.Error -> {
-                    setState { copy(isExtracting = false, errorMessage = result.message) }
+                    setState {
+                        copy(
+                            isExtracting = false,
+                            extractionError = result.message,
+                            extractedDocument = null,
+                            chunks = emptyList()
+                        )
+                    }
+                    sendSideEffect(DocReaderUiSideEffect.ShowToast("పత్రం సంగ్రహణ విఫలమైంది: ${result.message}"))
                 }
                 is VernAiResult.Loading -> Unit
             }
         }
     }
 
-    private fun summarizeDocument() {
-        val extracted = uiState.value.extractedDocument ?: return
-        setState { copy(isSummarizing = true) }
-        viewModelScope.launch(dispatchers.default) {
-            delay(700) // Simulated local LLM explanation
-            val report = ExplanationReport(
-                id = UUID.randomUUID().toString(),
-                sourceDocumentName = uiState.value.importedDocumentName,
-                extractedCharacterCount = extracted.rawText.length,
-                summaryInVernacular = "ఈ పత్రం రెవెన్యూ శాఖ నుండి వచ్చిన అధికారిక నోటీసు. సర్వే నంబర్ 142/A లోని 2.50 ఎకరాల భూమి పట్టా వివరాల ధృవీకరణ కొరకు జారీ చేయబడినది.",
-                keyActionPoints = listOf(
-                    "మీ ఆధార్ కార్డు మరియు పహాణీ నకలుతో తహశీల్దార్ ఆఫీసుకు వెళ్లాలి.",
-                    "సర్వీస్ ఛార్జీగా రూ. 150/- రసీదు పొందాలి.",
-                    "భూమి సరిహద్దు కొలతల దరఖాస్తును పూర్తి చేయాలి."
-                ),
-                legalDeadlines = listOf(
-                    "గడువు తేదీ: నోటీసు అందిన 30 రోజులలోపు తప్పనిసరిగా హాజరుకావలెను.",
-                    "గడువు ముగిసినచో నోటీసు చట్టరీత్యా రద్దగును."
-                ),
-                targetLanguage = uiState.value.activeLanguage
-            )
+    private fun importTestDocument(type: TestDocumentType) {
+        if (type == TestDocumentType.CORRUPTED_MALFORMED_FILE) {
+            // Intentionally demonstrate graceful extraction failure
+            setState {
+                copy(
+                    isExtracting = false,
+                    importedDocumentName = type.fileName,
+                    extractedDocument = null,
+                    chunks = emptyList(),
+                    explanationReport = null,
+                    qualityReport = null,
+                    selectedChunk = null,
+                    selectedSnippetExplanation = null,
+                    extractionError = "పత్రం పాడైంది లేదా చెల్లని ఫార్మాట్ (Corrupted PDF: 0 readable bytes found in file buffer)."
+                )
+            }
+            sendSideEffect(DocReaderUiSideEffect.ShowToast("పరీక్ష: పాడైన ఫైలు గుర్తించబడింది (Corrupted file handled)"))
+            return
+        }
 
-            // Save to room if repo available
-            repository?.saveExplanation(report)
+        setState {
+            copy(
+                isExtracting = true,
+                extractionError = null,
+                explanationReport = null,
+                selectedChunk = null,
+                selectedSnippetExplanation = null,
+                importedDocumentName = "${type.titleTelugu} (${type.fileName})"
+            )
+        }
+
+        viewModelScope.launch(dispatchers.default) {
+            val rawText = TestDocuments.getSampleDocumentText(type)
+            val extracted = ExtractedDocument(
+                title = type.fileName,
+                rawText = rawText,
+                detectedLanguage = uiState.value.activeLanguage,
+                pageCount = if (type.isScanned) 2 else 1,
+                isScannedImage = type.isScanned
+            )
+            val chunks = chunker.chunkDocument(rawText)
+            val quality = DocumentLimitationsAnalyzer.analyze(
+                rawText = rawText,
+                isScanned = type.isScanned,
+                language = uiState.value.activeLanguage
+            )
 
             setState {
                 copy(
-                    isSummarizing = false,
-                    explanationReport = report
+                    isExtracting = false,
+                    extractedDocument = extracted,
+                    chunks = chunks,
+                    qualityReport = quality
                 )
+            }
+
+            summarizeCurrentDocument()
+        }
+    }
+
+    private fun explainChunk(chunk: DocumentChunk) {
+        setState { copy(isExplainingSnippet = true, selectedChunk = chunk) }
+        viewModelScope.launch(dispatchers.default) {
+            val result = explainUseCase.explainSelectedText(chunk.text, uiState.value.activeLanguage)
+            when (result) {
+                is VernAiResult.Success -> {
+                    setState {
+                        copy(
+                            isExplainingSnippet = false,
+                            selectedSnippetExplanation = result.data
+                        )
+                    }
+                }
+                is VernAiResult.Error -> {
+                    setState { copy(isExplainingSnippet = false) }
+                    sendSideEffect(DocReaderUiSideEffect.ShowToast("వివరణ లోపం: ${result.message}"))
+                }
+                is VernAiResult.Loading -> Unit
+            }
+        }
+    }
+
+    private fun summarizeCurrentDocument() {
+        val extracted = uiState.value.extractedDocument ?: return
+        setState { copy(isSummarizing = true) }
+        viewModelScope.launch(dispatchers.default) {
+            val result = explainUseCase.summarizeDocument(
+                documentTitle = uiState.value.importedDocumentName,
+                documentText = extracted.rawText,
+                targetLanguage = uiState.value.activeLanguage
+            )
+            when (result) {
+                is VernAiResult.Success -> {
+                    setState {
+                        copy(
+                            isSummarizing = false,
+                            explanationReport = result.data
+                        )
+                    }
+                }
+                is VernAiResult.Error -> {
+                    setState { copy(isSummarizing = false) }
+                    sendSideEffect(DocReaderUiSideEffect.ShowToast("సారాంశం లోపం: ${result.message}"))
+                }
+                is VernAiResult.Loading -> Unit
             }
         }
     }
@@ -106,7 +223,7 @@ class DocReaderViewModel(
         val report = uiState.value.explanationReport ?: return
         setState { copy(isExporting = true) }
         viewModelScope.launch(dispatchers.io) {
-            val destination = File(cacheDir, "Explanation_${System.currentTimeMillis()}.pdf")
+            val destination = File(cacheDir, "DocumentExplanation_${System.currentTimeMillis()}.pdf")
             val result = exporter.exportExplanationReport(
                 report = report,
                 destinationFile = destination,

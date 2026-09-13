@@ -9,7 +9,9 @@ import java.io.File
 
 enum class ExportFormat(val extension: String, val mimeType: String) {
     PDF("pdf", "application/pdf"),
-    DOCX("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+    DOCX("docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    CSV("csv", "text/csv"),
+    XLSX("xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 }
 
 data class ExportConfig(

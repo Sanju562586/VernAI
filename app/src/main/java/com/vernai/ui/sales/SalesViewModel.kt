@@ -13,32 +13,62 @@ import com.vernai.core.common.result.VernAiResult
 import com.vernai.core.model.Language
 import com.vernai.core.model.SalesItem
 import com.vernai.core.model.SalesLog
+import com.vernai.core.model.SalesValidationStatus
 import com.vernai.document.export.DocumentExporter
 import com.vernai.document.export.ExportConfig
 import com.vernai.document.export.ExportFormat
+import com.vernai.document.export.SalesLedgerExporter
 import com.vernai.domain.repository.SalesLogRepository
 import com.vernai.domain.usecase.ExtractSalesLogUseCase
+import com.vernai.sales.processing.DuplicatePreventionEngine
+import com.vernai.sales.processing.SalesArithmeticValidator
+import com.vernai.sales.processing.TeluguSalesParser
 import com.vernai.ui.common.MviViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.io.File
-import java.util.UUID
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class SalesViewModel(
     private val asrEngine: AsrEngine = MockAsrEngine(),
     private val salesLogRepository: SalesLogRepository? = null,
     private val exporter: DocumentExporter = MockDocumentExporter(),
+    private val ledgerExporter: SalesLedgerExporter = SalesLedgerExporter(),
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
 ) : MviViewModel<SalesUiState, SalesUiIntent, SalesUiSideEffect>(
     SalesUiState(
         currentLog = SalesLog(
-            rawSpokenText = "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు, 2 నూనె ప్యాకెట్లు 260 రూపాయలు అమ్మిన.",
+            rawSpokenText = "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు, 2 నూనె ప్యాకెట్లు 260 రూపాయలు నగదు అమ్మిన.",
             detectedLanguage = Language.TELUGU,
             items = listOf(
-                SalesItem(id = "1", originalTerm = "టమాటా (Tomato)", standardName = "Tomato", quantity = 5.0, unit = "kg", unitPrice = 40.0, totalPrice = 200.0),
-                SalesItem(id = "2", originalTerm = "నూనె ప్యాకెట్లు (Oil)", standardName = "Cooking Oil", quantity = 2.0, unit = "packet", unitPrice = 130.0, totalPrice = 260.0)
+                SalesItem(
+                    id = "1",
+                    date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+                    originalTerm = "టమాటా (Tomato)",
+                    standardName = "Tomato",
+                    quantity = 5.0,
+                    unit = "కేజీ (kg)",
+                    unitPrice = 40.0,
+                    totalPrice = 200.0,
+                    notes = "నగదు",
+                    validationStatus = SalesValidationStatus.VERIFIED
+                ),
+                SalesItem(
+                    id = "2",
+                    date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()),
+                    originalTerm = "నూనె ప్యాకెట్లు (Oil)",
+                    standardName = "Cooking Oil",
+                    quantity = 2.0,
+                    unit = "ప్యాకెట్ (packet)",
+                    unitPrice = 130.0,
+                    totalPrice = 260.0,
+                    notes = "నగదు",
+                    validationStatus = SalesValidationStatus.VERIFIED
+                )
             ),
             grandTotal = 460.0
         )
@@ -47,6 +77,7 @@ class SalesViewModel(
     private val extractSalesLogUseCase = ExtractSalesLogUseCase(
         llmEngine = MockLlmInferenceEngine(),
         parser = SalesLogParser(),
+        teluguParser = TeluguSalesParser(),
         repository = salesLogRepository ?: object : SalesLogRepository {
             override fun getSalesLogsStream() = kotlinx.coroutines.flow.flowOf(emptyList<SalesLog>())
             override suspend fun getSalesLogById(id: String) = null
@@ -68,27 +99,112 @@ class SalesViewModel(
             is SalesUiIntent.ChangeLanguage -> setState { copy(selectedLanguage = intent.language) }
             is SalesUiIntent.ToggleRecording -> handleToggleRecording()
             is SalesUiIntent.SubmitManualTranscript -> processTranscript(intent.text, uiState.value.selectedLanguage)
-            is SalesUiIntent.UpdateItem -> {
-                val current = uiState.value.currentLog ?: return
-                val updatedItems = current.items.map { if (it.id == intent.item.id) intent.item else it }
-                val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
-                setState { copy(currentLog = updatedLog) }
-            }
-            is SalesUiIntent.DeleteItem -> {
-                val current = uiState.value.currentLog ?: return
-                val filteredItems = current.items.filterNot { it.id == intent.itemId }
-                val updatedLog = current.copy(items = filteredItems, grandTotal = filteredItems.sumOf { it.totalPrice })
-                setState { copy(currentLog = updatedLog) }
-            }
-            is SalesUiIntent.SaveLogToLedger -> {
-                val logToSave = uiState.value.currentLog ?: return
-                viewModelScope.launch(dispatchers.io) {
-                    salesLogRepository?.saveSalesLog(logToSave)
+            is SalesUiIntent.UpdateItem -> handleUpdateItem(intent.item)
+            is SalesUiIntent.AddNewItem -> handleAddNewItem(intent.item)
+            is SalesUiIntent.DeleteItem -> handleDeleteItem(intent.itemId)
+            is SalesUiIntent.SelectClarificationItem -> setState { copy(activeClarificationItem = intent.item) }
+            is SalesUiIntent.ResolveClarification -> handleResolveClarification(intent)
+            is SalesUiIntent.MergeDuplicate -> handleMergeDuplicate(intent.existingItemId, intent.duplicateItemId)
+            is SalesUiIntent.DismissDuplicate -> handleDismissDuplicate(intent.itemId)
+            is SalesUiIntent.FilterByDate -> setState { copy(filterDate = intent.date) }
+            is SalesUiIntent.SaveLogToLedger -> handleSaveLogToLedger()
+            is SalesUiIntent.ExportLedger -> exportLedger(intent.destinationFile, intent.format)
+        }
+    }
+
+    private fun handleUpdateItem(item: SalesItem) {
+        val current = uiState.value.currentLog ?: return
+        val reconciled = SalesArithmeticValidator.validateAndReconcile(item).item
+        val updatedItems = current.items.map { if (it.id == item.id) reconciled else it }
+        val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
+        setState { copy(currentLog = updatedLog, activeClarificationItem = null) }
+    }
+
+    private fun handleAddNewItem(item: SalesItem) {
+        val current = uiState.value.currentLog ?: SalesLog(
+            rawSpokenText = "మాన్యువల్ ఎంట్రీ",
+            detectedLanguage = uiState.value.selectedLanguage,
+            items = emptyList(),
+            grandTotal = 0.0
+        )
+        val reconciled = SalesArithmeticValidator.validateAndReconcile(item).item
+        val dupCheck = DuplicatePreventionEngine.checkDuplicate(reconciled, current.items)
+        val finalItem = if (dupCheck.isDuplicate) {
+            reconciled.copy(
+                validationStatus = SalesValidationStatus.DUPLICATE_WARNING,
+                clarificationPrompt = dupCheck.messageInTelugu
+            )
+        } else {
+            reconciled
+        }
+        val newItems = current.items + finalItem
+        val updatedLog = current.copy(items = newItems, grandTotal = newItems.sumOf { it.totalPrice })
+        setState { copy(currentLog = updatedLog) }
+    }
+
+    private fun handleDeleteItem(itemId: String) {
+        val current = uiState.value.currentLog ?: return
+        val filteredItems = current.items.filterNot { it.id == itemId }
+        val updatedLog = current.copy(items = filteredItems, grandTotal = filteredItems.sumOf { it.totalPrice })
+        setState {
+            copy(
+                currentLog = updatedLog,
+                activeClarificationItem = if (activeClarificationItem?.id == itemId) null else activeClarificationItem
+            )
+        }
+    }
+
+    private fun handleResolveClarification(intent: SalesUiIntent.ResolveClarification) {
+        val current = uiState.value.currentLog ?: return
+        val item = current.items.find { it.id == intent.itemId } ?: return
+        val resolved = SalesArithmeticValidator.resolveClarification(
+            item = item,
+            resolvedQuantity = intent.resolvedQuantity,
+            resolvedUnitPrice = intent.resolvedUnitPrice,
+            resolvedTotal = intent.resolvedTotal,
+            resolvedNotes = intent.resolvedNotes
+        )
+        val updatedItems = current.items.map { if (it.id == intent.itemId) resolved else it }
+        val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
+        setState { copy(currentLog = updatedLog, activeClarificationItem = null) }
+        sendSideEffect(SalesUiSideEffect.ShowToast("వివరణ నమోదు చేయబడింది (${resolved.originalTerm})"))
+    }
+
+    private fun handleMergeDuplicate(existingItemId: String, duplicateItemId: String) {
+        val current = uiState.value.currentLog ?: return
+        val existing = current.items.find { it.id == existingItemId } ?: return
+        val duplicate = current.items.find { it.id == duplicateItemId } ?: return
+        val merged = DuplicatePreventionEngine.mergeItems(existing, duplicate)
+
+        val updatedItems = current.items.filterNot { it.id == duplicateItemId }.map {
+            if (it.id == existingItemId) merged else it
+        }
+        val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
+        setState { copy(currentLog = updatedLog) }
+        sendSideEffect(SalesUiSideEffect.ShowToast("వస్తువులు విలీనం చేయబడ్డాయి (Merged: ${merged.quantity} ${merged.unit})"))
+    }
+
+    private fun handleDismissDuplicate(itemId: String) {
+        val current = uiState.value.currentLog ?: return
+        val updatedItems = current.items.map {
+            if (it.id == itemId) it.copy(validationStatus = SalesValidationStatus.VERIFIED, clarificationPrompt = null) else it
+        }
+        val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
+        setState { copy(currentLog = updatedLog) }
+    }
+
+    private fun handleSaveLogToLedger() {
+        val logToSave = uiState.value.currentLog ?: return
+        viewModelScope.launch(dispatchers.io) {
+            val result = salesLogRepository?.saveSalesLog(logToSave) ?: VernAiResult.Success(Unit)
+            when (result) {
+                is VernAiResult.Success -> {
                     sendSideEffect(SalesUiSideEffect.ShowToast("అమ్మకాల లెడ్జర్ భద్రపరచబడింది (Saved to Room DB)"))
                 }
-            }
-            is SalesUiIntent.ExportLedger -> {
-                exportLedger(intent.destinationFile)
+                is VernAiResult.Error -> {
+                    sendSideEffect(SalesUiSideEffect.ShowToast("భద్రపరచడం విఫలమైంది: ${result.message}"))
+                }
+                is VernAiResult.Loading -> Unit
             }
         }
     }
@@ -126,11 +242,23 @@ class SalesViewModel(
             setState { copy(isProcessing = false) }
             return
         }
-        setState { copy(isProcessing = true) }
+        setState { copy(isProcessing = true, errorMessage = null) }
         viewModelScope.launch(dispatchers.default) {
             when (val result = extractSalesLogUseCase(transcript, language)) {
                 is VernAiResult.Success -> {
-                    setState { copy(isProcessing = false, currentLog = result.data) }
+                    val log = result.data
+                    // Check if any item needs clarification right away
+                    val firstAmbiguous = log.items.find {
+                        it.validationStatus == SalesValidationStatus.CLARIFICATION_NEEDED ||
+                        it.validationStatus == SalesValidationStatus.ARITHMETIC_MISMATCH
+                    }
+                    setState {
+                        copy(
+                            isProcessing = false,
+                            currentLog = log,
+                            activeClarificationItem = firstAmbiguous
+                        )
+                    }
                 }
                 is VernAiResult.Error -> {
                     setState { copy(isProcessing = false, errorMessage = result.message) }
@@ -140,17 +268,23 @@ class SalesViewModel(
         }
     }
 
-    private fun exportLedger(destinationFile: File) {
+    private fun exportLedger(destinationFile: File, format: ExportFormat) {
         val log = uiState.value.currentLog ?: return
         viewModelScope.launch(dispatchers.io) {
-            val result = exporter.exportSalesLog(
-                salesLog = log,
-                destinationFile = destinationFile,
-                config = ExportConfig(format = ExportFormat.PDF, targetLanguage = uiState.value.selectedLanguage)
-            )
+            val result = when (format) {
+                ExportFormat.CSV -> ledgerExporter.exportToCsv(log, destinationFile)
+                ExportFormat.XLSX -> ledgerExporter.exportToXlsx(log, destinationFile)
+                ExportFormat.PDF, ExportFormat.DOCX -> {
+                    exporter.exportSalesLog(
+                        salesLog = log,
+                        destinationFile = destinationFile,
+                        config = ExportConfig(format = format, targetLanguage = uiState.value.selectedLanguage)
+                    )
+                }
+            }
             when (result) {
-                is VernAiResult.Success -> sendSideEffect(SalesUiSideEffect.ExportCompleted(result.data))
-                is VernAiResult.Error -> sendSideEffect(SalesUiSideEffect.ShowToast("Export Error: ${result.message}"))
+                is VernAiResult.Success -> sendSideEffect(SalesUiSideEffect.ExportCompleted(result.data, format))
+                is VernAiResult.Error -> sendSideEffect(SalesUiSideEffect.ShowToast("ఎగుమతి విఫలమైంది: ${result.message}"))
                 is VernAiResult.Loading -> Unit
             }
         }

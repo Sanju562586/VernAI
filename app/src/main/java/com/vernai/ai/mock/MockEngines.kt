@@ -154,6 +154,28 @@ class MockLlmInferenceEngine : LlmInferenceEngine {
     override suspend fun generateCompleteText(prompt: String, params: GenerationParameters): VernAiResult<String> {
         val result = if (params.grammar != null) {
             """{"items":[{"original_term":"టమాటా","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"నూనె ప్యాకెట్లు","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+        } else if (prompt.contains("Telugu legal drafting engine") || prompt.contains("LETTER TYPE:")) {
+            """
+            {
+              "subject": "విషయము: గ్రామ పరిధిలో తాగునీటి ఎద్దడి మరియు వీధి దీపాల మరమ్మత్తులు చేపట్టవలసిందిగా వినతి.",
+              "salutation": "గౌరవనీయులైన పంచాయతీ కార్యదర్శి / సర్పంచ్ గారికి,",
+              "reference": null,
+              "context_paragraph": "విన్నవించునది ఏమనగా, నేను/మేము శాంతినగర్ కాలనీ నివాసితులము. మా ప్రాంతంలో ఎదురవుతున్న తీవ్రమైన మౌలిక వసతుల సమస్యలను మీ అమూల్యమైన దృష్టికి తీసుకువచ్చి సత్వర పరిష్కారం కోరడానికి ఈ వినతిపత్రం సమర్పిస్తున్నాము.",
+              "factual_details_paragraph": "మా కాలనీలో గత 10 రోజులుగా వీధి దీపాలు వెలగకపోవడం వలన రాత్రి వేళల్లో రాకపోకలకు తీవ్ర అసౌకర్యం కలుగుతున్నది. అంతేగాక ప్రధాన పైప్‌లైన్ లీకేజీ కారణంగా గత 4 రోజులుగా తాగునీటి సరఫరా పూర్తిగా నిలిచిపోయింది. దీనివల్ల కాలనీలోని దాదాపు 150 కుటుంబాలు తీవ్ర ఇబ్బందులు ఎదుర్కొంటున్నాయి.",
+              "requested_action_paragraph": "కావున దయచేసి మా సమస్యల తీవ్రతను గుర్తించి, సంబంధిత అధికారులను తక్షణమే క్షేత్రస్థాయి పరిశీలనకు ఆదేశించి, తాగునీటి సరఫరా పునరుద్ధరణ మరియు వీధి దీపాల మరమ్మత్తులు వెంటనే పూర్తి చేయించగలరని వినయపూర్వకంగా వేడుకొనుచున్నాము.",
+              "closing": "ఇట్లు,\nభవదీయులు,",
+              "signature_name_placeholder": "[దరఖాస్తుదారుడి పేరు]",
+              "place": "శాంతినగర్",
+              "date": "13-09-2026",
+              "english_subject": "Subject: Representation regarding urgent restoration of drinking water supply and street lights.",
+              "english_body": "To\nThe Panchayat Secretary / Sarpanch,\nGrama Panchayat Office.\n\nSubject: Representation regarding urgent restoration of drinking water supply and street lights.\n\nRespected Sir/Madam,\n\nWe the residents of Shantinagar Colony bring to your urgent attention the severe civic issues prevailing in our locality. The street lights have been dysfunctional for the last 10 days, causing safety concerns at night. Furthermore, due to a major water pipeline breach, potable water supply has been disrupted for the past 4 days, affecting over 150 households.\n\nWe earnestly request your esteemed office to inspect the location and direct the technical team to restore water supply and repair street lights on priority.\n\nYours faithfully,\nResidents of Shantinagar\nPlace: Shantinagar\nDate: 13-09-2026",
+              "preserved_facts": [
+                "గత 10 రోజులుగా వీధి దీపాలు పనిచేయడం లేదు",
+                "పైప్‌లైన్ లీకేజీ వల్ల 4 రోజులుగా నీటి సరఫరా నిలిచిపోయింది",
+                "150 కుటుంబాలు తీవ్ర ఇబ్బందులు పడుతున్నాయి"
+              ]
+            }
+            """.trimIndent()
         } else {
             "రైతులకు నూతన పథకం కింద అర్హులైన ప్రతి ఒక్కరికీ సబ్సిడీ అందుతుంది."
         }

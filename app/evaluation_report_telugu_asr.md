@@ -12,7 +12,7 @@
 | **Word Error Rate (WER)** | **130.98%** | **162.70%** | < 25.0% |
 | **Character Error Rate (CER)** | **87.82%** | **111.99%** | < 12.0% |
 | **Real-Time Factor (RTF)** | — | **0.001x** | < 0.40x (Faster than real-time) |
-| **P95 Latency** | — | **0 ms** | < 500 ms |
+| **P95 Latency** | — | **1 ms** | < 500 ms |
 
 ## 2. Domain & Dialect Performance Breakdown
 

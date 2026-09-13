@@ -39,6 +39,7 @@ import kotlin.math.max
 class LlamaCppInferenceEngine(
     private val llamaBridge: LlamaBridge = LlamaBridge(),
     private val memoryMonitor: MemoryPressureMonitor? = null,
+    private val degradationManager: com.vernai.core.hardware.GracefulDegradationManager? = null,
     private val inferenceLock: InferenceLock = InferenceLock(),
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
 ) : LlmInferenceEngine {
@@ -112,10 +113,14 @@ class LlamaCppInferenceEngine(
                 }
             }
 
+            val policy = degradationManager?.currentPolicy?.value
+            val effectiveContext = policy?.activeContextLength ?: contextLength.coerceIn(512, 4096)
+            val effectiveThreads = policy?.activeThreads ?: nThreads.coerceIn(1, 8)
+
             val config = LlamaModelConfig(
                 modelFile = modelFile,
-                contextLength = contextLength.coerceIn(512, 4096),
-                nThreads = nThreads.coerceIn(1, 8),
+                contextLength = effectiveContext,
+                nThreads = effectiveThreads,
                 useMmap = true,
                 useMlock = false,
                 nGpuLayers = effectiveGpuLayers,
@@ -175,6 +180,21 @@ class LlamaCppInferenceEngine(
             throw IllegalStateException("Cannot run inference: GGUF model is not loaded into memory.")
         }
 
+        val policy = degradationManager?.currentPolicy?.value
+        if (policy?.isLlmExecutionPermitted == false) {
+            Log.w("VernAI-LLM", "LLM inference paused by degradation manager (${policy.degradationReason}). Emitting deterministic fallback tokens.")
+            val fallbackTokens = generateDomainSpecificFallbackTokens(prompt, params)
+            for (token in fallbackTokens) {
+                if (!currentCoroutineContext().isActive) break
+                delay(20)
+                emit(token)
+            }
+            return@flow
+        }
+
+        val pacingDelay = policy?.interTokenDelayMs ?: 0L
+        val maxTokensToGenerate = policy?.activeMaxOutputTokens?.coerceAtMost(params.maxTokens) ?: params.maxTokens
+
         val startTime = System.currentTimeMillis()
         var tokensGenerated = 0
         val isNative = nativeContextPtr != 0L && llamaBridge.isNativeLoaded
@@ -187,11 +207,15 @@ class LlamaCppInferenceEngine(
                 val promptTokens = llamaBridge.tokenize(nativeContextPtr, prompt)
                 llamaBridge.eval(nativeContextPtr, promptTokens)
 
-                for (step in 0 until params.maxTokens) {
+                for (step in 0 until maxTokensToGenerate) {
                     // Check coroutine cancellation
                     if (!currentCoroutineContext().isActive) {
                         Log.i("VernAI-LLM", "Inference cancelled by caller at step $step")
                         break
+                    }
+
+                    if (pacingDelay > 0L) {
+                        delay(pacingDelay)
                     }
 
                     val nextToken = llamaBridge.sampleToken(

@@ -99,6 +99,7 @@ class AudioRecordManager(
 
         val byteBuffer = ByteArray(config.bytesPerChunk)
         val shortBuffer = ShortArray(config.samplesPerChunk)
+        val reusableNormalized = FloatArray(config.samplesPerChunk)
 
         // Non-blocking capture loop running on dedicated ASR dispatcher
         val readerJob = kotlinx.coroutines.CoroutineScope(dispatchers.asrInference).launch {
@@ -113,12 +114,11 @@ class AudioRecordManager(
                             .get(shortBuffer, 0, bytesRead / 2)
 
                         val numSamples = bytesRead / 2
-                        val normalized = FloatArray(numSamples)
                         var sumSquares = 0.0
 
                         for (i in 0 until numSamples) {
                             val sample = shortBuffer[i] / 32768.0f
-                            normalized[i] = sample
+                            reusableNormalized[i] = sample
                             sumSquares += (sample * sample)
                         }
 
@@ -134,7 +134,7 @@ class AudioRecordManager(
 
                         val frame = AudioFrame(
                             pcmBytes = byteBuffer.copyOf(bytesRead),
-                            normalizedSamples = normalized,
+                            normalizedSamples = reusableNormalized.copyOf(numSamples),
                             decibels = db,
                             isSpeech = isSpeech,
                             timestampMs = System.currentTimeMillis()

@@ -41,15 +41,34 @@ class DataPrivacyManager(
             // 1. Wipe Room DB tables
             roomDatabase?.clearAllTables()
 
-            // 2. Clear export cache files
-            val exportCache = File(context.cacheDir, "exports")
-            if (exportCache.exists()) exportCache.deleteRecursively()
-            context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
+            // 2. Cryptographically shred SQLite database files if accessible
+            val dbFile = context.getDatabasePath("vernai.db")
+            if (dbFile != null && dbFile.exists()) {
+                val dbDir = dbFile.parentFile
+                dbDir?.listFiles { _, name -> name.startsWith("vernai.db") }?.forEach { f ->
+                    SecureFileShredder.shredFile(f)
+                }
+            }
 
-            // 3. Delete AI models if requested
+            // 3. Cryptographically shred export cache files
+            val exportCache = File(context.cacheDir, "exports")
+            if (exportCache.exists()) {
+                SecureFileShredder.shredDirectory(exportCache)
+            }
+            context.cacheDir.listFiles()?.forEach { f ->
+                if (f.isDirectory) {
+                    SecureFileShredder.shredDirectory(f)
+                } else {
+                    SecureFileShredder.shredFile(f)
+                }
+            }
+
+            // 4. Delete AI models if requested
             if (includeModels) {
                 val modelsDir = File(context.filesDir, "models")
-                if (modelsDir.exists()) modelsDir.deleteRecursively()
+                if (modelsDir.exists()) {
+                    modelsDir.deleteRecursively()
+                }
             }
 
             VernAiResult.Success(Unit)

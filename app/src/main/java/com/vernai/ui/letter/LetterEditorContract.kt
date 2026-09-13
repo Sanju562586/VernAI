@@ -85,7 +85,13 @@ Date: 13-09-2026
     val isSaving: Boolean = false,
     val isExporting: Boolean = false,
     val exportedFile: File? = null,
-    val activeTab: Int = 0 // 0 = వివరాలు (Inputs & Facts), 1 = తెలుగు లేఖ (Telugu Draft), 2 = English Copy
+    val activeTab: Int = 0, // 0 = వివరాలు (Inputs & Facts), 1 = తెలుగు లేఖ (Telugu Draft), 2 = English Copy
+
+    // Privacy & Anti-Hallucination Guardrails
+    val isDraft: Boolean = true,
+    val isUserReviewed: Boolean = false,
+    val showReviewDialog: Boolean = false,
+    val pendingExportFormat: ExportFormat? = null
 ) : UiState
 
 sealed interface LetterUiIntent : UiIntent {
@@ -112,6 +118,10 @@ sealed interface LetterUiIntent : UiIntent {
     data class SwitchTab(val tabIndex: Int) : LetterUiIntent
     data object SaveLetterDraft : LetterUiIntent
     data class ExportDocument(val format: ExportFormat, val cacheDir: File) : LetterUiIntent
+    data class RequestExport(val format: ExportFormat, val cacheDir: File) : LetterUiIntent
+    data class SetUserReviewed(val isReviewed: Boolean) : LetterUiIntent
+    data object ConfirmReviewAndExport : LetterUiIntent
+    data object DismissReviewDialog : LetterUiIntent
     data object LoadSampleFacts : LetterUiIntent
 }
 

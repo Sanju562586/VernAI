@@ -9,6 +9,13 @@ enum class TestDocumentType(
     val mimeType: String,
     val isScanned: Boolean
 ) {
+    SCHOLARSHIP_APPLICATION_FORM(
+        titleTelugu = "స్కాలర్‌షిప్ దరఖాస్తు మార్గదర్శకాలు (Scholarship Guidelines)",
+        titleEnglish = "Post-Matric Merit-cum-Means Scholarship Guidelines & Form",
+        fileName = "PostMatric_Scholarship_Form_2026.pdf",
+        mimeType = "application/pdf",
+        isScanned = false
+    ),
     REVENUE_PATTADAR_NOTICE(
         titleTelugu = "రెవెన్యూ పట్టా నోటీసు (Land Deed)",
         titleEnglish = "Revenue Pattadar Passbook Notice",
@@ -50,6 +57,40 @@ object TestDocuments {
 
     fun getSampleDocumentText(type: TestDocumentType): String {
         return when (type) {
+            TestDocumentType.SCHOLARSHIP_APPLICATION_FORM -> """
+                POST-MATRIC MERIT-CUM-MEANS SCHOLARSHIP SCHEME (HIGHER EDUCATION)
+                GOVERNMENT OF INDIA & STATE SCHOLARSHIP PORTAL
+                SCHOLARSHIP NOTIFICATION & APPLICATION GUIDELINES FOR ACADEMIC YEAR 2026-2027
+                
+                Ref No: SCH/MAHA-PUNE/2026/8842-B
+                Application Deadline: 31st October 2026
+                
+                1. ELIGIBILITY CRITERIA:
+                a) The applicant must be a bona fide resident of the state and enrolled in a recognized undergraduate college/university.
+                b) Total annual parental/family income from all sources must not exceed Rs. 2,50,000/- (Rupees Two Lakh Fifty Thousand only) per annum.
+                c) Minimum 60% marks or equivalent CGPA in the preceding qualifying examination (Higher Secondary / 12th Standard).
+                
+                2. MANDATORY ENCLOSURES & REQUIRED DOCUMENTS:
+                1. Domicile / Residence Certificate issued by the competent Tehsildar / Sub-Divisional Magistrate.
+                2. Original Income Certificate for Financial Year 2025-26 from competent revenue authority.
+                3. Caste / Category Validity Certificate (if applying under reserved category quotas).
+                4. Self-attested copy of 10th and 12th Grade Marksheets.
+                5. Student Bank Account Passbook front page (Account must be in the student's name, active, and Aadhaar-seeded / NPCI mapped with IFSC code).
+                6. College Bonafide Certificate & Current Academic Year Fee Receipt.
+                
+                3. STEP-BY-STEP APPLICATION PROCEDURE:
+                Section A: Personal and Demographic details (Name exactly as per Aadhaar Card).
+                Section B: Academic records and current institutional enrollment number.
+                Section C: Bank account details (Carefully enter 11-character IFSC and 16-digit Account Number).
+                Section D: Upload certified scanned copies of certificates (PDF format under 200 KB).
+                
+                4. IMPORTANT DATES & FEES:
+                - Application portal opens: 1st August 2026.
+                - Last Date for online form submission: 31st October 2026.
+                - Defective application correction window: Up to 10th November 2026.
+                - Application Fee: Rs. 0/- (Application is 100% Free of Cost. Do not pay any agent).
+            """.trimIndent()
+
             TestDocumentType.REVENUE_PATTADAR_NOTICE -> """
                 GOVERNMENT OF TELANGANA / ANDHRA PRADESH
                 రెవెన్యూ డిపార్ట్‌మెంట్ - తహశీల్దార్ కార్యాలయం
@@ -93,7 +134,7 @@ object TestDocuments {
                 1. రేషన్ కార్డులో నమోదైన ప్రతి కుటుంబ సభ్యుడు తమ సమీప రేషన్ దుకాణంలో (Fair Price Shop) ఈ-పాస్ (e-PoS) యంత్రం ద్వారా బయోమెట్రిక్ e-KYC పూర్తి చేసుకోవాలి.
                 2. చివరి తేదీ: 15-10-2026.
                 3. e-KYC కొరకు ఎటువంటి రుసుము (Fee) చెల్లించనవసరం లేదు. ఇది పూర్తిగా ఉచిత సేవ.
-                4. గడువులోపు e-KYC చేయించుకోని సభ్యుల పేర్లు తాత్కాలికంగా నిలుపుదల చేయబడతాయి.
+                4. గడువులోపు e-KYC చేయించుకోని సభ్యుల పేర్లు తాత్కాలिकంగా నిలుపుదల చేయబడతాయి.
             """.trimIndent()
 
             TestDocumentType.SCANNED_PHOTOSTAT_DOCUMENT -> """

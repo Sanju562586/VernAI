@@ -6,6 +6,7 @@ import com.vernai.document.processing.DocumentChunk
 import com.vernai.document.processing.DocumentQualityReport
 import com.vernai.document.processing.ExtractedDocument
 import com.vernai.document.processing.TestDocumentType
+import com.vernai.domain.usecase.FormFillingGuidance
 import com.vernai.ui.common.UiIntent
 import com.vernai.ui.common.UiSideEffect
 import com.vernai.ui.common.UiState
@@ -17,12 +18,13 @@ data class DocReaderUiState(
     val isSummarizing: Boolean = false,
     val isExplainingSnippet: Boolean = false,
     val isExporting: Boolean = false,
-    val importedDocumentName: String = "పట్టాదార్ పాస్ పుస్తకం నోటీసు (Revenue Notice.pdf)",
+    val importedDocumentName: String = "Post-Matric Merit-cum-Means Scholarship Guidelines & Form",
     val extractedDocument: ExtractedDocument? = null,
     val chunks: List<DocumentChunk> = emptyList(),
     val selectedChunk: DocumentChunk? = null,
     val selectedSnippetExplanation: String? = null,
     val explanationReport: ExplanationReport? = null,
+    val formFillingGuidance: FormFillingGuidance? = null,
     val qualityReport: DocumentQualityReport? = null,
     val showRawText: Boolean = false,
     val extractionError: String? = null

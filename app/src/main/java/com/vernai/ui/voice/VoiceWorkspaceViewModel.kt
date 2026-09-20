@@ -77,7 +77,7 @@ class VoiceWorkspaceViewModel(
                 recordingJob?.cancel()
                 timerJob?.cancel()
                 val spokenText = intent.text.trim()
-                val detected = if (spokenText.contains("అమ్మిన") || spokenText.contains("రూపాయలు") || spokenText.contains("కేజీ")) {
+                val detected = if (isSalesIntent(spokenText)) {
                     DetectedIntentType.SALES_RECORD
                 } else {
                     DetectedIntentType.COMPLAINT_LETTER
@@ -95,20 +95,16 @@ class VoiceWorkspaceViewModel(
 
                 viewModelScope.launch(dispatchers.default) {
                     val llmPrompt = if (detected == DetectedIntentType.SALES_RECORD) {
-                        "విశ్లేషించండి (Extract Sales items): $spokenText"
+                        "Extract Sales items from: $spokenText in ${uiState.value.activeLanguage.englishName}"
                     } else {
-                        "వినతిపత్రం (Draft Complaint): $spokenText"
+                        "Draft formal grievance complaint from: $spokenText in ${uiState.value.activeLanguage.englishName}"
                     }
                     val llmResult = llmEngine.generateCompleteText(llmPrompt)
 
                     val preview = if (llmResult is VernAiResult.Success && llmResult.data.isNotBlank()) {
                         llmResult.data
                     } else {
-                        if (detected == DetectedIntentType.SALES_RECORD) {
-                            "గుర్తించిన అమ్మకాలు (Sales Spoken):\n$spokenText\n\nలెడ్జర్ నమోదు కోసం సిద్ధంగా ఉంది."
-                        } else {
-                            "ఫిర్యాదు ముసాయిదా (Complaint Spoken):\n$spokenText\n\nస్థానిక AI ద్వారా అధికారిక వినతిపత్రంగా రూపొందించడానికి సిద్ధంగా ఉంది."
-                        }
+                        buildLocalizedPreview(detected, spokenText, uiState.value.activeLanguage)
                     }
 
                     setState {
@@ -122,13 +118,39 @@ class VoiceWorkspaceViewModel(
         }
     }
 
+    private fun isSalesIntent(text: String): Boolean {
+        val lower = text.lowercase()
+        return lower.contains("అమ్మిన") || lower.contains("రూపాయలు") || lower.contains("కేజీ") ||
+               lower.contains("விற்ற") || lower.contains("ரூபாய்") || lower.contains("கிலோ") || lower.contains("லிட்டர்") || lower.contains("ரொக்கம்") ||
+               lower.contains("बेचा") || lower.contains("रुपये") || lower.contains("किलो") || lower.contains("लीटर") || lower.contains("नकद") ||
+               lower.contains("sold") || lower.contains("rupee") || lower.contains("kg") || lower.contains("liter") || lower.contains("cash") || lower.contains("packet")
+    }
+
+    private fun buildLocalizedPreview(detected: DetectedIntentType, transcript: String, language: Language): String {
+        return if (detected == DetectedIntentType.SALES_RECORD) {
+            when (language) {
+                Language.TAMIL -> "கண்டறியப்பட்ட விற்பனை (Sales Detected):\n$transcript\n\nபதிவேட்டில் சேர்க்க தயாராக உள்ளது (Ready for Ledger)."
+                Language.HINDI, Language.MARATHI -> "पहचानी गई बिक्री (Sales Detected):\n$transcript\n\nबिक्री खाते में जोड़ने के लिए तैयार है।"
+                Language.ENGLISH -> "Detected Sales Record:\n$transcript\n\nReady for Sales Ledger entry."
+                else -> "గుర్తించిన అమ్మకాలు (Sales Spoken):\n$transcript\n\nలెడ్జర్ నమోదు కోసం సిద్ధంగా ఉంది."
+            }
+        } else {
+            when (language) {
+                Language.TAMIL -> "முறையான புகார் மனு (Complaint Draft):\n$transcript\n\nஅதிகாரப்பூர்வ மனுவாக மாற்ற தயாராக உள்ளது."
+                Language.HINDI, Language.MARATHI -> "शिकायत पत्र प्रारूप (Complaint Draft):\n$transcript\n\nऔपचारिक पत्र में बदलने के लिए तैयार है।"
+                Language.ENGLISH -> "Formal Grievance Complaint:\n$transcript\n\nReady for administrative petition generation."
+                else -> "ఫిర్యాదు ముసాయిదా (Complaint Spoken):\n$transcript\n\nస్థానిక AI ద్వారా అధికారిక వినతిపత్రంగా రూపొందించడానికి సిద్ధంగా ఉంది."
+            }
+        }
+    }
+
     private fun handleToggleRecording() {
         if (uiState.value.isRecording) {
             // Stop recording -> Transition to LLM reasoning
             recordingJob?.cancel()
             timerJob?.cancel()
             val currentText = uiState.value.liveTranscript.trim()
-            val immediateDetected = if (currentText.contains("అమ్మిన") || currentText.contains("రూపాయలు") || currentText.contains("కేజీ")) {
+            val immediateDetected = if (isSalesIntent(currentText)) {
                 DetectedIntentType.SALES_RECORD
             } else {
                 DetectedIntentType.COMPLAINT_LETTER
@@ -144,27 +166,40 @@ class VoiceWorkspaceViewModel(
                     currentText
                 }
 
-                val detected = if (finalPrompt.contains("అమ్మిన") || finalPrompt.contains("రూపాయలు") || finalPrompt.contains("కేజీ")) {
+                if (finalPrompt.isBlank()) {
+                    val emptyMsg = when (uiState.value.activeLanguage) {
+                        Language.TAMIL -> "குரல் கேட்கவில்லை. தயவுசெய்து மைக்கில் தெளிவாக பேசவும் (No speech recognized. Please speak clearly)."
+                        Language.HINDI, Language.MARATHI -> "आवाज स्पष्ट सुनाई नहीं दी। कृपया माइक में स्पष्ट बोलें (No speech recognized. Please speak clearly)."
+                        Language.ENGLISH -> "No speech recognized. Please speak clearly into the microphone."
+                        else -> "ధ్వని గుర్తించబడలేదు. దయచేసి మైక్రోఫోన్ వద్ద స్పష్టంగా మాట్లాడండి (No speech recognized. Please speak clearly)."
+                    }
+                    setState {
+                        copy(
+                            isRecording = false,
+                            stage = ProcessingStage.IDLE,
+                            errorMessage = emptyMsg
+                        )
+                    }
+                    return@launch
+                }
+
+                val detected = if (isSalesIntent(finalPrompt)) {
                     DetectedIntentType.SALES_RECORD
                 } else {
                     DetectedIntentType.COMPLAINT_LETTER
                 }
 
                 val llmPrompt = if (detected == DetectedIntentType.SALES_RECORD) {
-                    "విశ్లేషించండి (Extract Sales items): $finalPrompt"
+                    "Extract Sales items from: $finalPrompt in ${uiState.value.activeLanguage.englishName}"
                 } else {
-                    "వినతిపత్రం (Draft Complaint): $finalPrompt"
+                    "Draft formal grievance complaint from: $finalPrompt in ${uiState.value.activeLanguage.englishName}"
                 }
                 val llmResult = llmEngine.generateCompleteText(llmPrompt)
 
                 val preview = if (llmResult is VernAiResult.Success && llmResult.data.isNotBlank()) {
                     llmResult.data
                 } else {
-                    if (detected == DetectedIntentType.SALES_RECORD) {
-                        "గుర్తించిన అమ్మకాలు (Sales Spoken):\n$finalPrompt\n\nలెడ్జర్ నమోదు కోసం సిద్ధంగా ఉంది."
-                    } else {
-                        "ఫిర్యాదు ముసాయిదా (Complaint Spoken):\n$finalPrompt\n\nస్థానిక AI ద్వారా అధికారిక వినతిపత్రంగా రూపొందించడానికి సిద్ధంగా ఉంది."
-                    }
+                    buildLocalizedPreview(detected, finalPrompt, uiState.value.activeLanguage)
                 }
 
                 setState {
@@ -215,7 +250,8 @@ class VoiceWorkspaceViewModel(
                         if (partial.isFinal) {
                             timerJob?.cancel()
                             val text = currentText.trim()
-                            val detected = if (text.contains("అమ్మిన") || text.contains("రూపాయలు") || text.contains("కేజీ")) {
+                            if (text.isBlank()) return@collect
+                            val detected = if (isSalesIntent(text)) {
                                 DetectedIntentType.SALES_RECORD
                             } else {
                                 DetectedIntentType.COMPLAINT_LETTER

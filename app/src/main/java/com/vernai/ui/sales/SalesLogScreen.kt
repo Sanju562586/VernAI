@@ -217,7 +217,8 @@ fun SalesLogScreen(
                 }
             }
         },
-        modifier = modifier
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -226,13 +227,44 @@ fun SalesLogScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Language selector row (Telugu, Tamil, Hindi, English)
+            item {
+                Spacer(modifier = Modifier.height(2.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        com.vernai.core.model.Language.TELUGU,
+                        com.vernai.core.model.Language.TAMIL,
+                        com.vernai.core.model.Language.HINDI,
+                        com.vernai.core.model.Language.ENGLISH
+                    ).forEach { lang ->
+                        val isSelected = state.selectedLanguage == lang
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.handleIntent(SalesUiIntent.ChangeLanguage(lang)) },
+                            label = {
+                                Text(
+                                    text = "${lang.nativeName} (${lang.englishName})",
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            }
+                        )
+                    }
+                }
+            }
+
             // Voice Input & Live ASR bar
             item {
-                Spacer(modifier = Modifier.height(4.dp))
                 VoiceInputBar(
                     isRecording = state.isRecording,
                     isProcessing = state.isProcessing,
                     spokenTranscript = state.spokenTranscript,
+                    selectedLanguage = state.selectedLanguage,
                     onToggleRecord = {
                         if (state.isRecording) {
                             viewModel.handleIntent(SalesUiIntent.ToggleRecording)
@@ -245,9 +277,12 @@ fun SalesLogScreen(
 
             // Sample Dictations for quick testing
             item {
-                SampleDictationsRow(onSelectSample = { sample ->
-                    viewModel.handleIntent(SalesUiIntent.SubmitManualTranscript(sample))
-                })
+                SampleDictationsRow(
+                    selectedLanguage = state.selectedLanguage,
+                    onSelectSample = { sample ->
+                        viewModel.handleIntent(SalesUiIntent.SubmitManualTranscript(sample))
+                    }
+                )
             }
 
             // High-visibility Clarification Banner (when ambiguity or arithmetic discrepancy is found)
@@ -302,7 +337,7 @@ fun SalesLogScreen(
             val items = state.currentLog?.items ?: emptyList()
             if (items.isEmpty()) {
                 item {
-                    EmptySalesLedgerState()
+                    EmptySalesLedgerState(selectedLanguage = state.selectedLanguage)
                 }
             } else {
                 items(items, key = { it.id }) { item ->
@@ -463,10 +498,51 @@ fun ClarificationCard(
 }
 
 @Composable
-fun SampleDictationsRow(onSelectSample: (String) -> Unit) {
+fun SampleDictationsRow(
+    selectedLanguage: com.vernai.core.model.Language,
+    onSelectSample: (String) -> Unit
+) {
+    val header = when (selectedLanguage) {
+        com.vernai.core.model.Language.TAMIL -> "மாதிரி வாக்கியங்கள் (Quick Voice Samples):"
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "नमूना वाक्य (Quick Voice Samples):"
+        com.vernai.core.model.Language.ENGLISH -> "Quick Voice Samples:"
+        else -> "నమూనా వాక్యాలు (Quick Voice Samples):"
+    }
+
+    val samples: List<Pair<String, String>> = when (selectedLanguage) {
+        com.vernai.core.model.Language.TAMIL -> listOf(
+            "5 கிலோ தக்காளி 200 ரூபாய்" to "5 கிலோ தக்காளி 200",
+            "2 பாக்கெட் எண்ணெய் 260 ரூபாய் ரொக்கம்" to "2 எண்ணெய் 260 ரொக்கம்",
+            "10 கிலோ அரிசி கிலோ 40 ரூபாய் மொத்தம் 350" to "அரிசி முரண்பாடு (Discrepancy)",
+            "தக்காளி 150 ரூபாய்" to "தக்காளி (அளவு கேட்க வேண்டும்)",
+            "1 டஜன் சோப்பு 120 ரூபாய் கடன்" to "சோப்பு கடன் (Credit)"
+        )
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> listOf(
+            "5 किलो टमाटर 200 रुपये" to "5 किलो टमाटर 200",
+            "2 पैकेट तेल 260 रुपये नकद" to "2 पैकेट तेल 260 नकद",
+            "10 किलो चावल किलो 40 रुपये कुल 350" to "चावल हिसाब विसंगति (Discrepancy)",
+            "टमाटर 150 रुपये" to "टमाटर (मात्रा पूछें)",
+            "1 दर्जन साबुन 120 रुपये उधार" to "साबुन उधार (Credit)"
+        )
+        com.vernai.core.model.Language.ENGLISH -> listOf(
+            "5 kg tomato 200 rupees" to "5 kg tomato 200",
+            "2 packets oil 260 rupees cash" to "2 packets oil 260 cash",
+            "10 kg rice at 40 rupees total 350" to "Rice discrepancy",
+            "Tomato 150 rupees" to "Tomato (Ask quantity)",
+            "1 dozen soap 120 rupees credit" to "Soap credit"
+        )
+        else -> listOf(
+            "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు" to "5 కేజీల టమాటా 200",
+            "2 నూనె ప్యాకెట్లు 260 రూపాయలు నగదు" to "2 నూనె ప్యాకెట్లు 260 నగదు",
+            "10 కేజీల బియ్యం కేజీ 40 రూపాయలు మొత్తం 350" to "బియ్యం లెక్క తేడా (Discrepancy)",
+            "టమాటా 150 రూపాయలు" to "టమాటా (పరిమాణం అడగాలి)",
+            "1 డజన్ సబ్బులు 120 రూపాయలు రమేష్ కి అరువు" to "సబ్బులు అరువు (Credit)"
+        )
+    }
+
     Column {
         Text(
-            text = "నమూనా వాక్యాలు (Quick Voice Samples):",
+            text = header,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -477,26 +553,12 @@ fun SampleDictationsRow(onSelectSample: (String) -> Unit) {
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SuggestionChip(
-                onClick = { onSelectSample("ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు") },
-                label = { Text("5 కేజీల టమాటా 200") }
-            )
-            SuggestionChip(
-                onClick = { onSelectSample("2 నూనె ప్యాకెట్లు 260 రూపాయలు నగదు") },
-                label = { Text("2 నూనె ప్యాకెట్లు 260 నగదు") }
-            )
-            SuggestionChip(
-                onClick = { onSelectSample("10 కేజీల బియ్యం కేజీ 40 రూపాయలు మొత్తం 350") },
-                label = { Text("బియ్యం లెక్క తేడా (Discrepancy)") }
-            )
-            SuggestionChip(
-                onClick = { onSelectSample("టమాటా 150 రూపాయలు") },
-                label = { Text("టమాటా (పరిమాణం అడగాలి)") }
-            )
-            SuggestionChip(
-                onClick = { onSelectSample("1 డజన్ సబ్బులు 120 రూపాయలు రమేష్ కి అరువు") },
-                label = { Text("సబ్బులు అరువు (Credit)") }
-            )
+            samples.forEach { (text, label) ->
+                SuggestionChip(
+                    onClick = { onSelectSample(text) },
+                    label = { Text(label) }
+                )
+            }
         }
     }
 }
@@ -799,8 +861,23 @@ fun VoiceInputBar(
     isRecording: Boolean,
     isProcessing: Boolean,
     spokenTranscript: String,
+    selectedLanguage: com.vernai.core.model.Language = com.vernai.core.model.Language.TELUGU,
     onToggleRecord: () -> Unit
 ) {
+    val defaultHint = when (selectedLanguage) {
+        com.vernai.core.model.Language.TAMIL -> "விற்பனையை பேசுங்கள் (எ.கா: 5 கிலோ தக்காளி 200)"
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "दैनिक बिक्री बोलें (उदा: 5 किलो टमाटर 200)"
+        com.vernai.core.model.Language.ENGLISH -> "Speak daily sales (e.g. 5 kg tomato 200)"
+        else -> "అమ్మకాలను మాట్లాడండి (ఉదా: 5 కేజీల టమాటా 200)"
+    }
+
+    val processingHint = when (selectedLanguage) {
+        com.vernai.core.model.Language.TAMIL -> "தகவலை பிரித்தெடுக்கிறது..."
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "जानकारी निकाली जा रही है..."
+        com.vernai.core.model.Language.ENGLISH -> "Extracting sales data..."
+        else -> "సమాచారాన్ని సంగ్రహిస్తోంది..."
+    }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
@@ -829,13 +906,13 @@ fun VoiceInputBar(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(modifier = Modifier.width(8.dp))
-                        Text("సమాచారాన్ని సంగ్రహిస్తోంది...", style = MaterialTheme.typography.bodySmall)
+                        Text(processingHint, style = MaterialTheme.typography.bodySmall)
                     }
                 } else if (spokenTranscript.isNotBlank()) {
                     Text(text = spokenTranscript, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
                 } else {
                     Text(
-                        text = "అమ్మకాలను మాట్లాడండి (ఉదా: 5 కేజీల టమాటా 200)",
+                        text = defaultHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -846,7 +923,23 @@ fun VoiceInputBar(
 }
 
 @Composable
-fun EmptySalesLedgerState() {
+fun EmptySalesLedgerState(
+    selectedLanguage: com.vernai.core.model.Language = com.vernai.core.model.Language.TELUGU
+) {
+    val title = when (selectedLanguage) {
+        com.vernai.core.model.Language.TAMIL -> "விற்பனை இன்னும் பதிவு செய்யப்படவில்லை"
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "अभी तक कोई बिक्री दर्ज नहीं हुई"
+        com.vernai.core.model.Language.ENGLISH -> "No sales recorded yet"
+        else -> "ఇంకా అమ్మకాలు నమోదు కాలేదు"
+    }
+
+    val desc = when (selectedLanguage) {
+        com.vernai.core.model.Language.TAMIL -> "மைக்கை அழுத்தி விற்பனையை தமிழில் பேசுங்கள் அல்லது '+' ஐ அழுத்தவும்."
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "माइक दबाकर दैनिक बिक्री बोलें या ऊपर '+' दबाकर जोड़ें।"
+        com.vernai.core.model.Language.ENGLISH -> "Tap the mic to dictate daily sales or tap '+' to add manually."
+        else -> "మైక్ నొక్కి రోజూవారీ అమ్మకాలను చెప్పండి లేదా పైన '+' నొక్కి జోడించండి."
+    }
+
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -862,13 +955,13 @@ fun EmptySalesLedgerState() {
             )
             Spacer(modifier = Modifier.height(10.dp))
             Text(
-                text = "ఇంకా అమ్మకాలు నమోదు కాలేదు",
+                text = title,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleSmall
             )
             Spacer(modifier = Modifier.height(6.dp))
             Text(
-                text = "మైక్ నొక్కి రోజూవారీ అమ్మకాలను చెప్పండి లేదా పైన '+' నొక్కి జోడించండి.",
+                text = desc,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center

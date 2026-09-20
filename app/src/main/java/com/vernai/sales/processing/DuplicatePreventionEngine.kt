@@ -1,5 +1,6 @@
 package com.vernai.sales.processing
 
+import com.vernai.core.model.Language
 import com.vernai.core.model.SalesItem
 import com.vernai.core.model.SalesValidationStatus
 
@@ -12,13 +13,18 @@ object DuplicatePreventionEngine {
     data class DuplicateCheckResult(
         val isDuplicate: Boolean,
         val existingItem: SalesItem? = null,
-        val messageInTelugu: String? = null
+        val messageInTelugu: String? = null,
+        val duplicateMessage: String? = null
     )
 
     /**
      * Checks if [candidateItem] duplicates any item in [existingItems].
      */
-    fun checkDuplicate(candidateItem: SalesItem, existingItems: List<SalesItem>): DuplicateCheckResult {
+    fun checkDuplicate(
+        candidateItem: SalesItem,
+        existingItems: List<SalesItem>,
+        language: Language? = null
+    ): DuplicateCheckResult {
         val normCandidate = normalizeItemName(candidateItem.standardName.ifBlank { candidateItem.originalTerm })
 
         val match = existingItems.find { existing ->
@@ -28,11 +34,19 @@ object DuplicatePreventionEngine {
         }
 
         return if (match != null) {
-            val msg = "'${candidateItem.originalTerm}' ఈరోజు లెడ్జర్‌లో ఇప్పటికే ఉంది (${match.quantity} ${match.unit}, మొత్తం ₹${String.format(java.util.Locale.US, "%.2f", match.totalPrice)}). దీనిని కలపమంటారా (Merge) లేదా ప్రత్యేకంగా ఉంచమంటారా?"
+            val lang = language ?: Language.detectFromText(candidateItem.originalTerm)
+            val totalStr = String.format(java.util.Locale.US, "%.2f", match.totalPrice)
+            val msg = when (lang) {
+                Language.TAMIL -> "'${candidateItem.originalTerm}' இன்றைய பதிவேட்டில் ஏற்கனவே உள்ளது (${match.quantity} ${match.unit}, மொத்தம் ₹$totalStr). இதை ஒன்றாக சேர்க்கவா (Merge) அல்லது தனியாக வைக்கவா?"
+                Language.HINDI, Language.MARATHI -> "'${candidateItem.originalTerm}' आज के खाते में पहले से मौजूद है (${match.quantity} ${match.unit}, कुल ₹$totalStr)। क्या इसे जोड़ें (Merge) या अलग रखें?"
+                Language.ENGLISH -> "'${candidateItem.originalTerm}' already exists in today's ledger (${match.quantity} ${match.unit}, total ₹$totalStr). Merge items or keep separate?"
+                else -> "'${candidateItem.originalTerm}' ఈరోజు లెడ్జర్‌లో ఇప్పటికే ఉంది (${match.quantity} ${match.unit}, మొత్తం ₹$totalStr). దీనిని కలపమంటారా (Merge) లేదా ప్రత్యేకంగా ఉంచమంటారా?"
+            }
             DuplicateCheckResult(
                 isDuplicate = true,
                 existingItem = match,
-                messageInTelugu = msg
+                messageInTelugu = msg,
+                duplicateMessage = msg
             )
         } else {
             DuplicateCheckResult(isDuplicate = false)
@@ -42,12 +56,18 @@ object DuplicatePreventionEngine {
     /**
      * Marks duplicate items in a list with [SalesValidationStatus.DUPLICATE_WARNING].
      */
-    fun flagDuplicates(items: List<SalesItem>): List<SalesItem> {
+    fun flagDuplicates(items: List<SalesItem>, language: Language? = null): List<SalesItem> {
         val seen = mutableMapOf<String, SalesItem>()
         return items.map { item ->
             val key = "${normalizeItemName(item.standardName.ifBlank { item.originalTerm })}_${item.date}"
             if (seen.containsKey(key)) {
-                val prompt = "'${item.originalTerm}' ఇప్పటికే నమోదై ఉంది. పరిమాణం కలపాలా?"
+                val lang = language ?: Language.detectFromText(item.originalTerm)
+                val prompt = when (lang) {
+                    Language.TAMIL -> "'${item.originalTerm}' ஏற்கனவே பதிவு செய்யப்பட்டுள்ளது. அளவைக் கூட்டவா?"
+                    Language.HINDI, Language.MARATHI -> "'${item.originalTerm}' पहले से दर्ज है। क्या मात्रा जोड़ें?"
+                    Language.ENGLISH -> "'${item.originalTerm}' is already recorded. Merge quantity?"
+                    else -> "'${item.originalTerm}' ఇప్పటికే నమోదై ఉంది. పరిమాణం కలపాలా?"
+                }
                 item.copy(
                     validationStatus = SalesValidationStatus.DUPLICATE_WARNING,
                     clarificationPrompt = prompt
@@ -62,7 +82,7 @@ object DuplicatePreventionEngine {
     /**
      * Merges two duplicate sales items by summing their quantities and recalculating total.
      */
-    fun mergeItems(existing: SalesItem, duplicate: SalesItem): SalesItem {
+    fun mergeItems(existing: SalesItem, duplicate: SalesItem, language: Language? = null): SalesItem {
         val combinedQuantity = existing.quantity + duplicate.quantity
         val effectiveUnitPrice = if (existing.unitPrice > 0.0) existing.unitPrice else duplicate.unitPrice
         val combinedTotal = Math.round((combinedQuantity * effectiveUnitPrice) * 100.0) / 100.0
@@ -81,7 +101,7 @@ object DuplicatePreventionEngine {
             clarificationPrompt = null
         )
 
-        return SalesArithmeticValidator.validateAndReconcile(merged).item
+        return SalesArithmeticValidator.validateAndReconcile(merged, language).item
     }
 
     private fun normalizeItemName(name: String): String {
@@ -91,6 +111,10 @@ object DuplicatePreventionEngine {
             .replace("టమాటాలు", "టమాటా")
             .replace("ఉల్లిగడ్డలు", "ఉల్లిపాయలు")
             .replace("కోడిగుడ్లు", "గుడ్లు")
+            .replace("தக்காளி", "தக்காளி")
+            .replace("டொமேட்டோ", "தக்காளி")
+            .replace("ஆலு", "உருளைக்கிழங்கு")
+            .replace("டொமேட்டோ", "தக்காளி")
     }
 
     private fun isSameDate(date1: String, date2: String): Boolean {

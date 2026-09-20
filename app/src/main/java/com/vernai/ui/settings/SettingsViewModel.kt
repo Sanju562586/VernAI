@@ -1,11 +1,13 @@
 package com.vernai.ui.settings
 
+import android.content.Context
 import android.os.Build
 import androidx.lifecycle.viewModelScope
 import com.vernai.ai.llm.benchmark.DeviceThermalMonitor
 import com.vernai.ai.llm.benchmark.ExecutionBackend
 import com.vernai.ai.llm.benchmark.LlmBenchmarkResult
 import com.vernai.ai.llm.benchmark.LlmBenchmarkRunner
+import com.vernai.ai.model.OfflineModelInspector
 import com.vernai.ui.common.MviViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -13,8 +15,13 @@ import java.io.File
 import java.util.Locale
 
 class SettingsViewModel(
+    private val context: Context? = null,
     private val benchmarkRunner: LlmBenchmarkRunner? = null
-) : MviViewModel<SettingsUiState, SettingsUiIntent, SettingsUiSideEffect>(SettingsUiState()) {
+) : MviViewModel<SettingsUiState, SettingsUiIntent, SettingsUiSideEffect>(
+    SettingsUiState(
+        models = OfflineModelInspector.getModelStatusItems(context)
+    )
+) {
 
     override fun handleIntent(intent: SettingsUiIntent) {
         when (intent) {

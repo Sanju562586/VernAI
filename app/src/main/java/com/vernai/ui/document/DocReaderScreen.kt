@@ -158,7 +158,8 @@ fun DocReaderScreen(
                 }
             }
         },
-        modifier = modifier
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = modifier.fillMaxSize()
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -216,6 +217,42 @@ fun DocReaderScreen(
                             selected = isSelected,
                             onClick = { viewModel.handleIntent(DocReaderUiIntent.ImportTestDocument(docType)) },
                             label = { Text(docType.titleTelugu, fontSize = 12.sp) }
+                        )
+                    }
+                }
+            }
+
+            // Explanation Language Selector Row (Telugu, Tamil, Hindi, English, Marathi)
+            Column {
+                Text(
+                    text = when (state.activeLanguage) {
+                        com.vernai.core.model.Language.TAMIL -> "விளக்க மொழி (Explanation Language):"
+                        com.vernai.core.model.Language.HINDI -> "विवरण भाषा (Explanation Language):"
+                        com.vernai.core.model.Language.MARATHI -> "स्पष्टीकरण भाषा (Explanation Language):"
+                        com.vernai.core.model.Language.ENGLISH -> "Explanation Language:"
+                        else -> "వివరణ భాష (Explanation Language):"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        com.vernai.core.model.Language.TELUGU,
+                        com.vernai.core.model.Language.TAMIL,
+                        com.vernai.core.model.Language.HINDI,
+                        com.vernai.core.model.Language.ENGLISH,
+                        com.vernai.core.model.Language.MARATHI
+                    ).forEach { lang ->
+                        FilterChip(
+                            selected = state.activeLanguage == lang,
+                            onClick = { viewModel.handleIntent(DocReaderUiIntent.ChangeLanguage(lang)) },
+                            label = { Text("${lang.nativeName} (${lang.englishName})", fontSize = 12.sp) }
                         )
                     }
                 }
@@ -293,6 +330,11 @@ fun DocReaderScreen(
                 )
             }
 
+            // Structured Form Filling Guidance Card (Scholarship & Civic Applications)
+            state.formFillingGuidance?.let { guidance ->
+                FormFillingGuidanceCard(guidance = guidance)
+            }
+
             // Full Zero-Hallucination Explanation Section
             if (state.isSummarizing) {
                 Box(
@@ -304,8 +346,15 @@ fun DocReaderScreen(
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(10.dp))
+                        val loadingText = when (state.activeLanguage) {
+                            com.vernai.core.model.Language.TAMIL -> "உள்ளூர் AI எளிய தமிழில் விளக்குகிறது (Zero-Hallucination)..."
+                            com.vernai.core.model.Language.HINDI -> "स्थानीय AI सरल हिंदी में विवरण तैयार कर रहा है (Zero-Hallucination)..."
+                            com.vernai.core.model.Language.MARATHI -> "स्थानिक AI सोप्या मराठीत स्पष्टीकरण देत आहे (Zero-Hallucination)..."
+                            com.vernai.core.model.Language.ENGLISH -> "Local AI is analyzing and explaining the document (Zero-Hallucination)..."
+                            else -> "స్థానిక AI పత్రాన్ని సులభమైన తెలుగులో వివరిస్తోంది (Zero-Hallucination)..."
+                        }
                         Text(
-                            text = "స్థానిక AI పత్రాన్ని సులభమైన తెలుగులో వివరిస్తోంది (Zero-Hallucination)...",
+                            text = loadingText,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = FontWeight.Medium
                         )
@@ -681,3 +730,176 @@ fun ExplanationCard(report: com.vernai.core.model.ExplanationReport) {
         }
     }
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+fun FormFillingGuidanceCard(guidance: com.vernai.domain.usecase.FormFillingGuidance) {
+    ElevatedCard(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = when (guidance.targetLanguage) {
+                            com.vernai.core.model.Language.TAMIL -> "படிவம் நிரப்பும் வழிகாட்டி (Form-Filling Guide)"
+                            com.vernai.core.model.Language.HINDI -> "आवेदन पत्र भरने की मार्गदर्शिका (Form-Filling Guide)"
+                            com.vernai.core.model.Language.MARATHI -> "अर्ज भरण्यासाठी मार्गदर्शन (Form-Filling Guide)"
+                            com.vernai.core.model.Language.ENGLISH -> "Form-Filling Guidance (Step-by-Step Instructions)"
+                            else -> "దరఖాస్తు పూరించే మార్గదర్శిని (Form-Filling Guide)"
+                        },
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        text = guidance.formTitle,
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            // Eligibility Criteria
+            if (guidance.eligibilityCriteria.isNotEmpty()) {
+                Text(
+                    text = when (guidance.targetLanguage) {
+                        com.vernai.core.model.Language.TAMIL -> "தகுதி வரம்புகள் (Eligibility Criteria):"
+                        com.vernai.core.model.Language.HINDI -> "पात्रता मानदंड (Eligibility Criteria):"
+                        com.vernai.core.model.Language.MARATHI -> "पात्रता निकष (Eligibility Criteria):"
+                        com.vernai.core.model.Language.ENGLISH -> "Eligibility Criteria:"
+                        else -> "అర్హత నిబంధనలు (Eligibility Criteria):"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                guidance.eligibilityCriteria.forEach { crit ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircleOutline,
+                            contentDescription = null,
+                            tint = Color(0xFF059669),
+                            modifier = Modifier.size(16.dp).padding(top = 2.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = crit, fontSize = 12.sp, lineHeight = 18.sp)
+                    }
+                }
+            }
+
+            // Mandatory Documents Checklist
+            if (guidance.mandatoryDocuments.isNotEmpty()) {
+                Text(
+                    text = when (guidance.targetLanguage) {
+                        com.vernai.core.model.Language.TAMIL -> "தேவையான சான்றிதழ்கள் (Mandatory Documents):"
+                        com.vernai.core.model.Language.HINDI -> "आवश्यक प्रमाण पत्र (Mandatory Documents):"
+                        com.vernai.core.model.Language.MARATHI -> "आवश्यक कागदपत्रे (Mandatory Documents):"
+                        com.vernai.core.model.Language.ENGLISH -> "Mandatory Documents / Enclosures:"
+                        else -> "అవసరమైన ధృవపత్రాలు (Mandatory Documents):"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    guidance.mandatoryDocuments.forEach { doc ->
+                        SuggestionChip(
+                            onClick = {},
+                            label = { Text(doc, fontSize = 11.sp) }
+                        )
+                    }
+                }
+            }
+
+            // Step-by-Step Instructions
+            if (guidance.sectionWiseInstructions.isNotEmpty()) {
+                Text(
+                    text = when (guidance.targetLanguage) {
+                        com.vernai.core.model.Language.TAMIL -> "படிவத்தின் பகுதிகள் (Step-by-Step Sections):"
+                        com.vernai.core.model.Language.HINDI -> "आवेदन के चरण (Step-by-Step Sections):"
+                        com.vernai.core.model.Language.MARATHI -> "अर्जाचे टप्पे (Step-by-Step Sections):"
+                        com.vernai.core.model.Language.ENGLISH -> "Step-by-Step Sections:"
+                        else -> "దరఖాస్తు దశలు (Step-by-Step Sections):"
+                    },
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                guidance.sectionWiseInstructions.forEachIndexed { idx, sec ->
+                    Row(verticalAlignment = Alignment.Top) {
+                        Box(
+                            modifier = Modifier
+                                .size(18.dp)
+                                .clip(CircleShape)
+                                .background(MaterialTheme.colorScheme.primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "${idx + 1}",
+                                color = Color.White,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(text = sec, fontSize = 12.sp, lineHeight = 18.sp)
+                    }
+                }
+            }
+
+            // Deadline & Fee Highlight Box
+            Card(
+                shape = RoundedCornerShape(10.dp),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFFFEF3C7).copy(alpha = 0.7f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(10.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(
+                            imageVector = Icons.Default.WarningAmber,
+                            contentDescription = null,
+                            tint = Color(0xFFD97706),
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = guidance.submissionDeadline,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color(0xFF92400E)
+                        )
+                    }
+                    Text(
+                        text = guidance.applicationFee,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF065F46)
+                    )
+                }
+            }
+        }
+    }
+}
+

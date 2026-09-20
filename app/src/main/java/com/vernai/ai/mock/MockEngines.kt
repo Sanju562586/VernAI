@@ -27,7 +27,7 @@ import java.io.File
 import java.io.InputStream
 
 /**
- * Mock ASR Engine emitting realistic Telugu & multilingual speech transcription tokens.
+ * Mock ASR Engine emitting realistic Telugu, Tamil, Hindi, and English speech transcription tokens.
  */
 class MockAsrEngine : AsrEngine {
     private val _state = MutableStateFlow<AsrState>(AsrState.Ready)
@@ -46,11 +46,11 @@ class MockAsrEngine : AsrEngine {
         _state.value = AsrState.Recording(decibels = 65.0f)
 
         val sampleUtterances = when (lang) {
-            Language.TELUGU -> listOf(
-                "ఈరోజు",
-                "ఈరోజు 5 కేజీల టమాటా",
-                "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు,",
-                "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు, 2 నూనె ప్యాకెట్లు 260 రూపాయలు అమ్మిన."
+            Language.TAMIL -> listOf(
+                "இன்று",
+                "இன்று 5 கிலோ தக்காளி",
+                "இன்று 5 கிலோ தக்காளி 200 ரூபாய்,",
+                "இன்று 5 கிலோ தக்காளி 200 ரூபாய், 2 பாக்கெட் எண்ணெய் 260 ரூபாய் ரொக்கம் விற்றேன்."
             )
             Language.HINDI -> listOf(
                 "आज",
@@ -58,11 +58,17 @@ class MockAsrEngine : AsrEngine {
                 "आज 5 किलो टमाटर 200 रुपये,",
                 "आज 5 किलो टमाटर 200 रुपये, 2 पैकेट तेल 260 रुपये में बेचा।"
             )
-            else -> listOf(
+            Language.ENGLISH -> listOf(
                 "Today",
                 "Today 5 kg tomato",
                 "Today 5 kg tomato 200 rupees,",
-                "Today 5 kg tomato 200 rupees and 2 oil packets 260 rupees sold."
+                "Today 5 kg tomato 200 rupees and 2 packets oil 260 rupees sold."
+            )
+            else -> listOf(
+                "ఈరోజు",
+                "ఈరోజు 5 కేజీల టమాటా",
+                "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు,",
+                "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు, 2 నూనె ప్యాకెట్లు 260 రూపాయలు అమ్మిన."
             )
         }
 
@@ -83,9 +89,15 @@ class MockAsrEngine : AsrEngine {
 
     override suspend fun stopLiveTranscription(): VernAiResult<TranscriptionResult> {
         _state.value = AsrState.Ready
+        val text = when (activeLanguage) {
+            Language.TAMIL -> "இன்று 5 கிலோ தக்காளி 200 ரூபாய், 2 பாக்கெட் எண்ணெய் 260 ரூபாய் ரொக்கம் விற்றேன்."
+            Language.HINDI -> "आज 5 किलो टमाटर 200 रुपये, 2 पैकेट तेल 260 रुपये में बेचा।"
+            Language.ENGLISH -> "Today 5 kg tomato 200 rupees and 2 packets oil 260 rupees sold."
+            else -> "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు, 2 నూనె ప్యాకెట్లు 260 రూపాయలు అమ్మిన."
+        }
         return VernAiResult.Success(
             TranscriptionResult(
-                text = "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు, 2 నూనె ప్యాకెట్లు 260 రూపాయలు అమ్మిన.",
+                text = text,
                 isFinal = true,
                 detectedLanguage = activeLanguage,
                 confidence = 0.96f
@@ -94,6 +106,7 @@ class MockAsrEngine : AsrEngine {
     }
 
     override suspend fun transcribeSnippet(snippet: AudioSnippet, languageHint: Language?): VernAiResult<TranscriptionResult> {
+        languageHint?.let { activeLanguage = it }
         return stopLiveTranscription()
     }
 
@@ -104,7 +117,7 @@ class MockAsrEngine : AsrEngine {
 }
 
 /**
- * Mock LLM Engine simulating streaming tokens for Qwen2.5 GGUF.
+ * Mock LLM Engine simulating streaming tokens for Qwen2.5 GGUF across Telugu, Tamil, Hindi, and English.
  */
 class MockLlmInferenceEngine : LlmInferenceEngine {
     private val _state = MutableStateFlow<LlmEngineState>(LlmEngineState.Ready)
@@ -124,19 +137,28 @@ class MockLlmInferenceEngine : LlmInferenceEngine {
         _state.value = LlmEngineState.Generating(tokensGenerated = 0, tokensPerSec = 16.5f)
 
         val sampleText = if (params.grammar != null) {
-            """{"items":[{"original_term":"టమాటా","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"నూనె ప్యాకెట్లు","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+            when {
+                prompt.contains("Tamil", ignoreCase = true) || prompt.contains("தமிழ்") ->
+                    """{"items":[{"original_term":"தக்காளி","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"எண்ணெய்","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+                prompt.contains("Hindi", ignoreCase = true) || prompt.contains("हिन्दी") ->
+                    """{"items":[{"original_term":"टमाटर","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"तेल","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+                prompt.contains("English", ignoreCase = true) ->
+                    """{"items":[{"original_term":"Tomato","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"Cooking Oil","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+                else ->
+                    """{"items":[{"original_term":"టమాటా","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"నూనె ప్యాకెట్లు","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+            }
         } else {
             """
                 విషయం: గ్రామ పంచాయతీ పరిధిలో వీధి దీపాలు మరియు తాగునీటి సమస్య పరిష్కారం కొరకు వినతిపత్రం.
                 
                 గౌరవనీయులైన సర్పంచ్ / పంచాయతీ కార్యదర్శి గారికి,
                 
-                మా గ్రామమైన శాంతినగర్ కాలనీలో గత వారం రోజులుగా వీధి దీపాలు పనిచేయడం లేదు. రాత్రి వేళల్లో ప్రజలు, ముఖ్యంగా వృద్ధులు మరియు పిల్లలు తీవ్ర ఇబ్బందులు పడుతున్నారు. అలాగే మంచినీటి సరఫరా కూడా అస్తవ్యస్తంగా ఉంది.
+                మా గ్రామమైన శాంతినగర్ కాలనీలో గత వారం రోజులుగా వీధి దీపాలు పనిచేయడం లేదు. రాత్రి వేళల్లో ప్రజలు తీవ్ర ఇబ్బందులు పడుతున్నారు.
                 
-                కావున దయచేసి తక్షణమే స్పందించి వీధి దీపాలు సరిచేయించి, తాగునీరు సక్రమంగా అందించాలని కోరుతున్నాము.
+                కావున దయచేసి తక్షణమే స్పందించి వీధి దీపాలు సరిచేయించాలని కోరుతున్నాము.
                 
                 ఇట్లు,
-                గ్రామ ప్రజలు, శాంతినగర్.
+                గ్రామ ప్రజలు.
             """.trimIndent()
         }
 
@@ -153,7 +175,16 @@ class MockLlmInferenceEngine : LlmInferenceEngine {
 
     override suspend fun generateCompleteText(prompt: String, params: GenerationParameters): VernAiResult<String> {
         val result = if (params.grammar != null) {
-            """{"items":[{"original_term":"టమాటా","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"నూనె ప్యాకెట్లు","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+            when {
+                prompt.contains("Tamil", ignoreCase = true) || prompt.contains("தமிழ்") ->
+                    """{"items":[{"original_term":"தக்காளி","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"எண்ணெய்","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+                prompt.contains("Hindi", ignoreCase = true) || prompt.contains("हिन्दी") ->
+                    """{"items":[{"original_term":"टमाटर","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"तेल","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+                prompt.contains("English", ignoreCase = true) ->
+                    """{"items":[{"original_term":"Tomato","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"Cooking Oil","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+                else ->
+                    """{"items":[{"original_term":"టమాటా","standard_name":"Tomato","quantity":5.0,"unit":"kg","unit_price":40.0,"total_price":200.0},{"original_term":"నూనె ప్యాకెట్లు","standard_name":"Cooking Oil","quantity":2.0,"unit":"packet","unit_price":130.0,"total_price":260.0}]}"""
+            }
         } else if (prompt.contains("Telugu legal drafting engine") || prompt.contains("LETTER TYPE:")) {
             """
             {
@@ -177,19 +208,77 @@ class MockLlmInferenceEngine : LlmInferenceEngine {
             }
             """.trimIndent()
         } else if (prompt.contains("Selected Text:")) {
-            "ఈ ఎంచుకున్న భాగం ముఖ్య సూచన: పౌరులు తమ భూమి పట్టా వివరాలను సరిచూసుకోవడానికి తహశీల్దార్ ఆఫీసులో నిర్ణీత గడువులోపు హాజరుకావాలని స్పష్టం చేయుచున్నది. ఇది అధికారిక రికార్డుల నమోదుకు తప్పనిసరి."
+            when {
+                prompt.contains("Tamil", ignoreCase = true) || prompt.contains("தமிழ்") ->
+                    "தேர்ந்தெடுக்கப்பட்ட பகுதியின் சுருக்கம்: விண்ணப்பதாரர் தகுதி வரம்புகள் மற்றும் சான்றிதழ் விவரங்களை சரிபார்த்து உரிய காலத்தில் சமர்ப்பிக்க வேண்டும்."
+                prompt.contains("Hindi", ignoreCase = true) || prompt.contains("हिन्दी") ->
+                    "चयनित अंश का सारांश: आवेदक को अपनी पात्रता और प्रमाण पत्रों की पुष्टि कर निर्धारित समय सीमा में आवेदन करना होगा।"
+                prompt.contains("Marathi", ignoreCase = true) || prompt.contains("मराठी") ->
+                    "निवडलेल्या भागाचा सारांश: अर्जदाराने आपली पात्रता व प्रमाणपत्रे तपासून अंतिम मुदतीपूर्वी सादर करणे आवश्यक आहे."
+                prompt.contains("English", ignoreCase = true) ->
+                    "Summary of excerpt: The applicant must verify their eligibility criteria and upload valid certificates prior to the deadline."
+                else ->
+                    "ఈ ఎంచుకున్న భాగం ముఖ్య సూచన: పౌరులు తమ భూమి పట్టా వివరాలను సరిచూసుకోవడానికి తహశీల్దార్ ఆఫీసులో నిర్ణీత గడువులోపు హాజరుకావాలని స్పష్టం చేయుచున్నది."
+            }
         } else if (prompt.contains("Document Text:") || prompt.contains("legal and civic document explainer")) {
-            """
-            [SUMMARY]
-            ఈ పత్రం రెవెన్యూ శాఖ నుండి వచ్చిన అధికారిక పట్టాదార్ పాస్ పుస్తక నోటీసు. సర్వే నంబర్ 142/A లోని 2.50 ఎకరాల భూమి హక్కుల ధృవీకరణ కొరకు జారీ చేయబడినది.
-            [ACTIONS]
-            - ఆధార్ కార్డు మరియు పహాణీ నకలుతో తహశీల్దార్ ఆఫీసుకు స్వయంగా వెళ్లాలి.
-            - సర్వీస్ ఛార్జీగా రూ. 150/- మీసేవ ద్వారా చెల్లించి రసీదు పొందాలి.
-            - సరిహద్దుల డిజిటల్ ల్యాండ్ సర్వే పూర్తి చేయించాలి.
-            [DEADLINES_AND_FEES]
-            - గడువు తేదీ: నోటీసు అందిన 30 రోజులలోపు తప్పనిసరిగా హాజరుకావలెను.
-            - చెల్లించవలసిన చలానా రుసుము: రూ. 150/- మాత్రమే.
-            """.trimIndent()
+            when {
+                prompt.contains("Tamil", ignoreCase = true) || prompt.contains("தமிழ்") ->
+                    """
+                    [SUMMARY]
+                    இந்த ஆவணம் உயர்கல்விக்கான தகுதி மற்றும் வருமான அடிப்படையிலான உதவித்தொகை வழிகாட்டுதல் பற்றியதாகும்.
+                    [ACTIONS]
+                    - வருமான சான்றிதழ் (ஆண்டு வருமானம் ரூ. 2.50 லட்சத்திற்குள்) மற்றும் இருப்பிட சான்றிதழ் சமர்ப்பிக்கவும்.
+                    - ஆதார் இணைக்கப்பட்ட மாணவர் வங்கி கணக்கு விவரங்களை சரியாக உள்ளிடவும்.
+                    [DEADLINES_AND_FEES]
+                    - கடைசி தேதி: 31 அக்டோபர் 2026.
+                    - விண்ணப்ப கட்டணம்: ரூ. 0/- (முற்றிலும் இலவச சேவை).
+                    """.trimIndent()
+                prompt.contains("Hindi", ignoreCase = true) || prompt.contains("हिन्दी") ->
+                    """
+                    [SUMMARY]
+                    यह दस्तावेज़ उच्च शिक्षा के लिए योग्यता-सह-साधन छात्रवृत्ति योजना के आधिकारिक दिशा-निर्देश प्रदान करता है।
+                    [ACTIONS]
+                    - वित्तीय वर्ष 2025-26 का आय प्रमाण पत्र (आय ₹2.50 लाख से कम) और मूल निवास प्रमाण पत्र संलग्न करें।
+                    - आधार से जुड़े सक्रिय बैंक खाते का विवरण (IFSC सहित) दर्ज करें।
+                    [DEADLINES_AND_FEES]
+                    - आवेदन की अंतिम तिथि: 31 अक्टूबर 2026.
+                    - आवेदन शुल्क: ₹0/- (पूर्णतः निःशुल्क).
+                    """.trimIndent()
+                prompt.contains("Marathi", ignoreCase = true) || prompt.contains("मराठी") ->
+                    """
+                    [SUMMARY]
+                    हा दस्तऐवज उच्च शिक्षणासाठी गुणवत्ता व उत्पन्न आधारित शिष्यवृत्ती योजनेची अधिकृत नियमावली स्पष्ट करतो.
+                    [ACTIONS]
+                    - तहसीलदार यांचे सक्षम अधिवास व उत्पन्न प्रमाणपत्र (उत्पन्न मर्यादा ₹२.५० लाख) जोडावे.
+                    - आधार संलग्न असलेल्या राष्ट्रीयीकृत बँक खात्याचा IFSC कोड व तपशील अचूक नोंदवावा.
+                    [DEADLINES_AND_FEES]
+                    - अर्ज सादर करण्याची अंतिम मुदत: ३१ ऑक्टोबर २०२६.
+                    - अर्ज शुल्क: ₹०/- (पूर्णपणे मोफत).
+                    """.trimIndent()
+                prompt.contains("English", ignoreCase = true) ->
+                    """
+                    [SUMMARY]
+                    This document provides official guidelines for the Post-Matric Merit-cum-Means Scholarship Scheme.
+                    [ACTIONS]
+                    - Enclose Domicile Certificate and Income Certificate (Annual family income <= Rs. 2,50,000/-).
+                    - Provide student active bank account details with Aadhaar/NPCI seeding and IFSC code.
+                    [DEADLINES_AND_FEES]
+                    - Submission Deadline: 31st October 2026.
+                    - Application Fee: Rs. 0/- (100% Free of Cost).
+                    """.trimIndent()
+                else ->
+                    """
+                    [SUMMARY]
+                    ఈ పత్రం రెవెన్యూ శాఖ నుండి వచ్చిన అధికారిక పట్టాదార్ పాస్ పుస్తక నోటీసు. సర్వే నంబర్ 142/A లోని 2.50 ఎకరాల భూమి హక్కుల ధృవీకరణ కొరకు జారీ చేయబడినది.
+                    [ACTIONS]
+                    - ఆధార్ కార్డు మరియు పహాణీ నకలుతో తహశీల్దార్ ఆఫీసుకు స్వయంగా వెళ్లాలి.
+                    - సర్వీస్ ఛార్జీగా రూ. 150/- మీసేవ ద్వారా చెల్లించి రసీదు పొందాలి.
+                    - సరిహద్దుల డిజిటల్ ల్యాండ్ సర్వే పూర్తి చేయించాలి.
+                    [DEADLINES_AND_FEES]
+                    - గడువు తేదీ: నోటీసు అందిన 30 రోజులలోపు తప్పనిసరిగా హాజరుకావలెను.
+                    - చెల్లించవలసిన చలానా రుసుము: రూ. 150/- మాత్రమే.
+                    """.trimIndent()
+            }
         } else {
             "రైతులకు నూతన పథకం కింద అర్హులైన ప్రతి ఒక్కరికీ సబ్సిడీ అందుతుంది."
         }
@@ -214,14 +303,14 @@ class MockDocumentProcessor : DocumentProcessor {
             ExtractedDocument(
                 title = file.name,
                 rawText = """
-                    GOVERNMENT OF TELANGANA / ANDHRA PRADESH
-                    REVENUE DEPARTMENT - PATTADAR PASSBOOK / NOTICE
-                    సర్వే నంబర్: 142/A, విస్తీర్ణం: 2.50 ఎకరాలు.
-                    భూమి స్వభావం: పట్టా మెట్ట.
-                    షరతులు: ఈ నోటీసు అందిన 30 రోజులలోపు సంబంధిత తహశీల్దార్ కార్యాలయంలో ఆధార్ మరియు పహాణీ నకలుతో రిపోర్ట్ చేయవలెను.
-                    రుసుము: సర్వీస్ ఛార్జీ రూ. 150/- చెల్లించవలసి ఉంటుంది. గడువు ముగిసినచో నోటీసు రద్దగును.
+                    POST-MATRIC MERIT-CUM-MEANS SCHOLARSHIP SCHEME (HIGHER EDUCATION)
+                    GOVERNMENT OF INDIA & STATE SCHOLARSHIP PORTAL
+                    Application Deadline: 31st October 2026
+                    Eligibility: Resident of state, family income under Rs. 2,50,000/- per annum.
+                    Required Documents: Domicile Certificate, Income Certificate, Caste Certificate, Bank Passbook IFSC.
+                    Application Fee: Rs. 0/- Free of Cost.
                 """.trimIndent(),
-                detectedLanguage = Language.TELUGU,
+                detectedLanguage = languageHint ?: Language.ENGLISH,
                 pageCount = 1,
                 isScannedImage = false
             )

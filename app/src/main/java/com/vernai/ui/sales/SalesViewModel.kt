@@ -114,7 +114,7 @@ class SalesViewModel(
 
     private fun handleUpdateItem(item: SalesItem) {
         val current = uiState.value.currentLog ?: return
-        val reconciled = SalesArithmeticValidator.validateAndReconcile(item).item
+        val reconciled = SalesArithmeticValidator.validateAndReconcile(item, uiState.value.selectedLanguage).item
         val updatedItems = current.items.map { if (it.id == item.id) reconciled else it }
         val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
         setState { copy(currentLog = updatedLog, activeClarificationItem = null) }
@@ -127,12 +127,12 @@ class SalesViewModel(
             items = emptyList(),
             grandTotal = 0.0
         )
-        val reconciled = SalesArithmeticValidator.validateAndReconcile(item).item
-        val dupCheck = DuplicatePreventionEngine.checkDuplicate(reconciled, current.items)
+        val reconciled = SalesArithmeticValidator.validateAndReconcile(item, uiState.value.selectedLanguage).item
+        val dupCheck = DuplicatePreventionEngine.checkDuplicate(reconciled, current.items, uiState.value.selectedLanguage)
         val finalItem = if (dupCheck.isDuplicate) {
             reconciled.copy(
                 validationStatus = SalesValidationStatus.DUPLICATE_WARNING,
-                clarificationPrompt = dupCheck.messageInTelugu
+                clarificationPrompt = dupCheck.duplicateMessage ?: dupCheck.messageInTelugu
             )
         } else {
             reconciled
@@ -162,7 +162,8 @@ class SalesViewModel(
             resolvedQuantity = intent.resolvedQuantity,
             resolvedUnitPrice = intent.resolvedUnitPrice,
             resolvedTotal = intent.resolvedTotal,
-            resolvedNotes = intent.resolvedNotes
+            resolvedNotes = intent.resolvedNotes,
+            language = uiState.value.selectedLanguage
         )
         val updatedItems = current.items.map { if (it.id == intent.itemId) resolved else it }
         val updatedLog = current.copy(items = updatedItems, grandTotal = updatedItems.sumOf { it.totalPrice })
@@ -174,7 +175,7 @@ class SalesViewModel(
         val current = uiState.value.currentLog ?: return
         val existing = current.items.find { it.id == existingItemId } ?: return
         val duplicate = current.items.find { it.id == duplicateItemId } ?: return
-        val merged = DuplicatePreventionEngine.mergeItems(existing, duplicate)
+        val merged = DuplicatePreventionEngine.mergeItems(existing, duplicate, uiState.value.selectedLanguage)
 
         val updatedItems = current.items.filterNot { it.id == duplicateItemId }.map {
             if (it.id == existingItemId) merged else it
@@ -212,17 +213,26 @@ class SalesViewModel(
     private fun handleToggleRecording() {
         if (uiState.value.isRecording) {
             recordingJob?.cancel()
+            val spokenSoFar = uiState.value.spokenTranscript.trim()
             setState { copy(isRecording = false, isProcessing = true) }
             viewModelScope.launch(dispatchers.io) {
                 val finalResult = asrEngine.stopLiveTranscription()
-                when (finalResult) {
-                    is VernAiResult.Success -> {
-                        processTranscript(finalResult.data.text, uiState.value.selectedLanguage)
+                val textToProcess = if (finalResult is VernAiResult.Success && finalResult.data.text.isNotBlank()) {
+                    finalResult.data.text.trim()
+                } else {
+                    spokenSoFar
+                }
+
+                if (textToProcess.isNotBlank()) {
+                    processTranscript(textToProcess, uiState.value.selectedLanguage)
+                } else {
+                    val emptyMsg = when (uiState.value.selectedLanguage) {
+                        Language.TAMIL -> "குரல் பதிவு கண்டறியப்படவில்லை. தயவுசெய்து மீண்டும் பேசவும் (No speech detected)."
+                        Language.HINDI, Language.MARATHI -> "आवाज दर्ज नहीं हुई। कृपया दोबारा बोलें (No speech detected)."
+                        Language.ENGLISH -> "No speech detected. Please try speaking again."
+                        else -> "ఆడియో రికార్డింగ్ వినబడలేదు. దయచేసి మళ్ళీ మాట్లాడండి (No speech detected)."
                     }
-                    is VernAiResult.Error -> {
-                        setState { copy(isProcessing = false, errorMessage = finalResult.message) }
-                    }
-                    is VernAiResult.Loading -> Unit
+                    setState { copy(isProcessing = false, errorMessage = emptyMsg) }
                 }
             }
         } else {
@@ -270,13 +280,14 @@ class SalesViewModel(
 
     private fun exportLedger(destinationFile: File, format: ExportFormat) {
         val log = uiState.value.currentLog ?: return
+        val logToExport = log.copy(detectedLanguage = uiState.value.selectedLanguage)
         viewModelScope.launch(dispatchers.io) {
             val result = when (format) {
-                ExportFormat.CSV -> ledgerExporter.exportToCsv(log, destinationFile)
-                ExportFormat.XLSX -> ledgerExporter.exportToXlsx(log, destinationFile)
+                ExportFormat.CSV -> ledgerExporter.exportToCsv(logToExport, destinationFile)
+                ExportFormat.XLSX -> ledgerExporter.exportToXlsx(logToExport, destinationFile)
                 ExportFormat.PDF, ExportFormat.DOCX -> {
                     exporter.exportSalesLog(
-                        salesLog = log,
+                        salesLog = logToExport,
                         destinationFile = destinationFile,
                         config = ExportConfig(format = format, targetLanguage = uiState.value.selectedLanguage)
                     )

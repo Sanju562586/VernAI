@@ -2,21 +2,30 @@ package com.vernai.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val PrimaryIndigo = Color(0xFF1E3A8A)
-val PrimaryIndigoLight = Color(0xFF3B82F6)
-val PrimaryIndigoDark = Color(0xFF172554)
+// Primary — deep indigo/blue used as the main brand colour
+val PrimaryIndigo      = Color(0xFF2563EB)   // Light-mode primary
+val PrimaryIndigoLight = Color(0xFF60A5FA)   // Dark-mode primary
 
-val SecondaryTeal = Color(0xFF0F766E)
-val SecondaryTealLight = Color(0xFF14B8A6)
+// Secondary — muted teal accent
+val SecondaryTeal      = Color(0xFF0D9488)
+val SecondaryTealLight = Color(0xFF2DD4BF)
 
-val AccentAmber = Color(0xFFD97706)
-val AccentEmerald = Color(0xFF059669)
+// Accent
+val AccentAmber   = Color(0xFFF59E0B)
+val AccentEmerald = Color(0xFF10B981)
 
-val SurfaceLight = Color(0xFFF8FAFC)
-val SurfaceDark = Color(0xFF0F172A)
+// Surfaces
+val SurfaceLight = Color(0xFFFFFFFF)
+val SurfaceDark  = Color(0xFF111827)
 
-val BackgroundLight = Color(0xFFF1F5F9)
-val BackgroundDark = Color(0xFF020617)
+val BackgroundLight = Color(0xFFF9FAFB)
+val BackgroundDark  = Color(0xFF030712)
 
-val OnSurfaceLight = Color(0xFF0F172A)
-val OnSurfaceDark = Color(0xFFF8FAFC)
+// On-surface
+val OnSurfaceLight = Color(0xFF111827)
+val OnSurfaceDark  = Color(0xFFF9FAFB)
+
+// Status colours (semantic)
+val StatusRed    = Color(0xFFEF4444)
+val StatusGreen  = Color(0xFF22C55E)
+val StatusAmber  = Color(0xFFF59E0B)

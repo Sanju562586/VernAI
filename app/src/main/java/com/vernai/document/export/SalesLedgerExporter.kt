@@ -1,6 +1,7 @@
 package com.vernai.document.export
 
 import com.vernai.core.common.result.VernAiResult
+import com.vernai.core.model.Language
 import com.vernai.core.model.SalesItem
 import com.vernai.core.model.SalesLog
 import java.io.File
@@ -13,10 +14,76 @@ import java.util.Locale
 
 /**
  * Robust, standalone exporter for Sales Ledger data supporting:
- * 1. CSV with UTF-8 BOM for perfect Telugu text rendering in Excel/Sheets.
- * 2. Excel XML Spreadsheet (XLSX-compatible) with native styling, formulas, and auto-summation.
+ * 1. CSV with UTF-8 BOM for perfect Telugu, Tamil, Hindi, and English rendering in Excel/Sheets.
+ * 2. Excel XML Spreadsheet (XLSX-compatible) with native styling, formulas, localized headers, and auto-summation.
  */
 class SalesLedgerExporter {
+
+    data class LocalizedLedgerHeaders(
+        val worksheetName: String,
+        val dateHeader: String,
+        val itemHeader: String,
+        val qtyHeader: String,
+        val unitHeader: String,
+        val priceHeader: String,
+        val totalHeader: String,
+        val notesHeader: String,
+        val statusHeader: String,
+        val grandTotalLabel: String
+    )
+
+    fun getHeaders(language: Language): LocalizedLedgerHeaders {
+        return when (language) {
+            Language.TAMIL -> LocalizedLedgerHeaders(
+                worksheetName = "விற்பனை பதிவு",
+                dateHeader = "தேதி (Date)",
+                itemHeader = "பொருள் (Item)",
+                qtyHeader = "அளவு (Qty)",
+                unitHeader = "அலகு (Unit)",
+                priceHeader = "விலை (Unit Price)",
+                totalHeader = "மொத்தம் (Total)",
+                notesHeader = "குறிப்புகள் (Notes)",
+                statusHeader = "நிலை (Status)",
+                grandTotalLabel = "மொத்த விற்பனை (Grand Total)"
+            )
+            Language.HINDI, Language.MARATHI -> LocalizedLedgerHeaders(
+                worksheetName = "बिक्री खाता",
+                dateHeader = "दिनांक (Date)",
+                itemHeader = "सामग्री (Item)",
+                qtyHeader = "मात्रा (Qty)",
+                unitHeader = "इकाई (Unit)",
+                priceHeader = "दर (Unit Price)",
+                totalHeader = "कुल मूल्य (Total)",
+                notesHeader = "विवरण (Notes)",
+                statusHeader = "स्थिति (Status)",
+                grandTotalLabel = "कुल बिक्री (Grand Total)"
+            )
+            Language.ENGLISH -> LocalizedLedgerHeaders(
+                worksheetName = "Sales Ledger",
+                dateHeader = "Date",
+                itemHeader = "Item Name",
+                qtyHeader = "Quantity",
+                unitHeader = "Unit",
+                priceHeader = "Unit Price",
+                totalHeader = "Total Price",
+                notesHeader = "Notes",
+                statusHeader = "Status",
+                grandTotalLabel = "Grand Total"
+            )
+            else -> LocalizedLedgerHeaders(
+                worksheetName = "అమ్మకాల లెడ్జర్",
+                dateHeader = "తేదీ (Date)",
+                itemHeader = "వస్తువు (Item)",
+                qtyHeader = "పరిమాణం (Qty)",
+                unitHeader = "కొలత (Unit)",
+                priceHeader = "ధర (Unit Price)",
+                totalHeader = "మొత్తం (Total)",
+                notesHeader = "గమనికలు (Notes)",
+                statusHeader = "పరిశీలన (Status)",
+                grandTotalLabel = "మొత్తం అమ్మకాలు (Grand Total)"
+            )
+        }
+    }
 
     /**
      * Exports [SalesLog] to a CSV file with UTF-8 Byte Order Mark (BOM).
@@ -25,14 +92,15 @@ class SalesLedgerExporter {
     fun exportToCsv(salesLog: SalesLog, destinationFile: File): VernAiResult<File> {
         return runCatching {
             destinationFile.parentFile?.mkdirs()
+            val h = getHeaders(salesLog.detectedLanguage)
 
             FileOutputStream(destinationFile).use { fos ->
                 // Write UTF-8 Byte Order Mark (BOM)
                 fos.write(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()))
 
                 OutputStreamWriter(fos, StandardCharsets.UTF_8).use { writer ->
-                    // Header Row
-                    writer.write("తేదీ (Date),వస్తువు పేరు (Item),పరిమాణం (Quantity),కొలత (Unit),ధర (Unit Price),మొత్తం (Total Price),గమనికలు (Notes),పరిశీలన (Status)\n")
+                    // Localized Header Row
+                    writer.write("${escapeCsv(h.dateHeader)},${escapeCsv(h.itemHeader)},${escapeCsv(h.qtyHeader)},${escapeCsv(h.unitHeader)},${escapeCsv(h.priceHeader)},${escapeCsv(h.totalHeader)},${escapeCsv(h.notesHeader)},${escapeCsv(h.statusHeader)}\n")
 
                     // Item Rows
                     for (item in salesLog.items) {
@@ -50,20 +118,20 @@ class SalesLedgerExporter {
 
                     // Grand Total Row
                     val grandTotalStr = String.format(Locale.US, "%.2f", salesLog.grandTotal)
-                    writer.write("\"మొత్తం అమ్మకాలు (Grand Total)\",\"\",\"\",\"\",\"\",$grandTotalStr,\"\",\"\n")
+                    writer.write("\"${h.grandTotalLabel}\",\"\",\"\",\"\",\"\",$grandTotalStr,\"\",\"\n")
                     writer.flush()
                 }
             }
             VernAiResult.Success(destinationFile)
         }.getOrElse { e ->
-            VernAiResult.Error(e, "CSV ఎగుమతి విఫలమైంది (CSV export failed: ${e.localizedMessage})")
+            VernAiResult.Error(e, "CSV export failed: ${e.localizedMessage}")
         }
     }
 
     /**
      * Exports [SalesLog] to an Excel-compatible XML Spreadsheet (SpreadsheetML 2003).
-     * This format natively opens in Microsoft Excel, LibreOffice Calc, and Google Sheets,
-     * embedding Telugu Unicode, bold header styling, currency formatting, and dynamic formulas.
+     * This format natively opens in Microsoft Excel, LibreOffice Calc, and Google Sheets / iQOO Office Kit,
+     * embedding Indic Unicode, bold header styling, currency formatting, and dynamic formulas.
      */
     fun exportToXlsx(salesLog: SalesLog, destinationFile: File): VernAiResult<File> {
         return runCatching {
@@ -74,11 +142,12 @@ class SalesLedgerExporter {
 
             VernAiResult.Success(destinationFile)
         }.getOrElse { e ->
-            VernAiResult.Error(e, "Excel ఎగుమతి విఫలమైంది (Excel export failed: ${e.localizedMessage})")
+            VernAiResult.Error(e, "Excel export failed: ${e.localizedMessage}")
         }
     }
 
     private fun buildExcelXml(salesLog: SalesLog): String {
+        val h = getHeaders(salesLog.detectedLanguage)
         val sb = StringBuilder()
         sb.append("""<?xml version="1.0" encoding="UTF-8"?>""").append("\n")
         sb.append("""<?mso-application progid="Excel.Sheet"?>""").append("\n")
@@ -133,7 +202,7 @@ class SalesLedgerExporter {
   </Styles>""").append("\n")
 
         // Worksheet
-        sb.append("""  <Worksheet ss:Name="అమ్మకాల లెడ్జర్">""").append("\n")
+        sb.append("""  <Worksheet ss:Name="${xmlEscape(h.worksheetName)}">""").append("\n")
         sb.append("""    <Table ss:DefaultRowHeight="20">""").append("\n")
         sb.append("""      <Column ss:Width="100"/>""").append("\n") // Date
         sb.append("""      <Column ss:Width="160"/>""").append("\n") // Item
@@ -146,14 +215,14 @@ class SalesLedgerExporter {
 
         // Table Header
         sb.append("""      <Row ss:Height="26">
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">తేదీ (Date)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">వస్తువు (Item)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">పరిమాణం (Qty)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">కొలత (Unit)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">ధర (Unit Price)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">మొత్తం (Total)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">గమనికలు (Notes)</Data></Cell>
-        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">పరిశీలన (Status)</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.dateHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.itemHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.qtyHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.unitHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.priceHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.totalHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.notesHeader)}</Data></Cell>
+        <Cell ss:StyleID="HeaderStyle"><Data ss:Type="String">${xmlEscape(h.statusHeader)}</Data></Cell>
       </Row>""").append("\n")
 
         // Data Rows
@@ -164,7 +233,6 @@ class SalesLedgerExporter {
             val unit = xmlEscape(item.unit)
             val notes = xmlEscape(item.notes ?: "")
             val status = xmlEscape(item.validationStatus.name)
-            val rowNum = idx + 2 // 1-indexed, header is row 1
 
             sb.append("""      <Row>
         <Cell><Data ss:Type="String">$date</Data></Cell>
@@ -184,7 +252,7 @@ class SalesLedgerExporter {
         val grandTotal = salesLog.grandTotal
 
         sb.append("""      <Row ss:Height="24">
-        <Cell ss:StyleID="TotalLabelStyle"><Data ss:Type="String">మొత్తం (Grand Total)</Data></Cell>
+        <Cell ss:StyleID="TotalLabelStyle"><Data ss:Type="String">${xmlEscape(h.grandTotalLabel)}</Data></Cell>
         <Cell ss:StyleID="TotalLabelStyle"><Data ss:Type="String"></Data></Cell>
         <Cell ss:StyleID="TotalLabelStyle"><Data ss:Type="String"></Data></Cell>
         <Cell ss:StyleID="TotalLabelStyle"><Data ss:Type="String"></Data></Cell>

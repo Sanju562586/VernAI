@@ -17,7 +17,12 @@ class HomeViewModel(
     override fun handleIntent(intent: HomeUiIntent) {
         when (intent) {
             is HomeUiIntent.SelectLanguage -> {
-                setState { copy(activeLanguage = intent.language) }
+                setState {
+                    copy(
+                        activeLanguage = intent.language,
+                        features = getFeaturesForLanguage(intent.language)
+                    )
+                }
             }
             is HomeUiIntent.NavigateTo -> {
                 sendSideEffect(HomeUiSideEffect.Navigate(intent.destination))

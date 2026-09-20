@@ -23,6 +23,10 @@ import com.vernai.ai.llm.benchmark.LlmBenchmarkRunner
 import com.vernai.ui.voice.VoiceWorkspaceScreen
 import com.vernai.ui.voice.VoiceWorkspaceViewModel
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+
 @Composable
 fun VernAiNavigation() {
     val backStack = rememberNavBackStack(VernAiNavDestination.Home)
@@ -33,87 +37,118 @@ fun VernAiNavigation() {
         onBack = { backStack.removeLastOrNull() },
         entryProvider = entryProvider {
             entry<VernAiNavDestination.Home> {
-                val homeViewModel: HomeViewModel = viewModel {
-                    HomeViewModel(app.database)
+                Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val homeViewModel: HomeViewModel = viewModel {
+                        HomeViewModel(app.database)
+                    }
+                    HomeScreen(
+                        viewModel = homeViewModel,
+                        onNavigate = { destination -> backStack.add(destination) }
+                    )
                 }
-                HomeScreen(
-                    viewModel = homeViewModel,
-                    onNavigate = { destination -> backStack.add(destination) }
-                )
             }
 
             entry<VernAiNavDestination.VoiceWorkspace> {
-                val voiceViewModel: VoiceWorkspaceViewModel = viewModel {
-                    VoiceWorkspaceViewModel(
-                        asrEngine = app.asrEngine,
-                        llmEngine = app.llmEngine,
-                        dispatchers = app.dispatchers
+                Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val voiceViewModel: VoiceWorkspaceViewModel = viewModel {
+                        VoiceWorkspaceViewModel(
+                            asrEngine = app.asrEngine,
+                            llmEngine = app.llmEngine,
+                            dispatchers = app.dispatchers
+                        )
+                    }
+                    VoiceWorkspaceScreen(
+                        viewModel = voiceViewModel,
+                        onNavigateBack = { backStack.removeLastOrNull() },
+                        onNavigateToDestination = { destination -> backStack.add(destination) }
                     )
                 }
-                VoiceWorkspaceScreen(
-                    viewModel = voiceViewModel,
-                    onNavigateBack = { backStack.removeLastOrNull() },
-                    onNavigateToDestination = { destination -> backStack.add(destination) }
-                )
             }
 
             entry<VernAiNavDestination.SalesLedger> {
-                val salesViewModel: SalesViewModel = viewModel {
-                    SalesViewModel(
-                        asrEngine = app.asrEngine,
-                        salesLogRepository = LocalSalesLogRepository(app.database),
-                        dispatchers = app.dispatchers
+                Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val salesViewModel: SalesViewModel = viewModel {
+                        SalesViewModel(
+                            asrEngine = app.asrEngine,
+                            salesLogRepository = LocalSalesLogRepository(app.database),
+                            dispatchers = app.dispatchers
+                        )
+                    }
+                    SalesLogScreen(
+                        viewModel = salesViewModel,
+                        onNavigateBack = { backStack.removeLastOrNull() }
                     )
                 }
-                SalesLogScreen(
-                    viewModel = salesViewModel,
-                    onNavigateBack = { backStack.removeLastOrNull() }
-                )
             }
 
             entry<VernAiNavDestination.ComplaintDrafting> { destination ->
-                val letterViewModel: LetterEditorViewModel = viewModel {
-                    LetterEditorViewModel(
-                        complaintRepository = LocalComplaintRepository(app.database),
-                        llmEngine = app.llmEngine,
-                        dispatchers = app.dispatchers,
-                        initialTranscript = destination.initialTranscript
+                Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val letterViewModel: LetterEditorViewModel = viewModel {
+                        LetterEditorViewModel(
+                            complaintRepository = LocalComplaintRepository(app.database),
+                            llmEngine = app.llmEngine,
+                            dispatchers = app.dispatchers,
+                            initialTranscript = destination.initialTranscript
+                        )
+                    }
+                    LetterEditorScreen(
+                        viewModel = letterViewModel,
+                        initialTranscript = destination.initialTranscript,
+                        onNavigateBack = { backStack.removeLastOrNull() }
                     )
                 }
-                LetterEditorScreen(
-                    viewModel = letterViewModel,
-                    initialTranscript = destination.initialTranscript,
-                    onNavigateBack = { backStack.removeLastOrNull() }
-                )
             }
 
             entry<VernAiNavDestination.DocumentExplainer> {
-                val docViewModel: DocReaderViewModel = viewModel {
-                    DocReaderViewModel(
-                        repository = LocalDocumentRepository(app.database),
-                        dispatchers = app.dispatchers
+                Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val docViewModel: DocReaderViewModel = viewModel {
+                        DocReaderViewModel(
+                            repository = LocalDocumentRepository(app.database),
+                            dispatchers = app.dispatchers
+                        )
+                    }
+                    DocReaderScreen(
+                        viewModel = docViewModel,
+                        onNavigateBack = { backStack.removeLastOrNull() }
                     )
                 }
-                DocReaderScreen(
-                    viewModel = docViewModel,
-                    onNavigateBack = { backStack.removeLastOrNull() }
-                )
             }
 
             entry<VernAiNavDestination.Settings> {
-                val settingsViewModel: SettingsViewModel = viewModel {
-                    SettingsViewModel(
-                        benchmarkRunner = LlmBenchmarkRunner(
+                Surface(
+                    modifier = androidx.compose.ui.Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    val settingsViewModel: SettingsViewModel = viewModel {
+                        SettingsViewModel(
                             context = app,
-                            engine = app.llmEngine,
-                            dispatchers = app.dispatchers
+                            benchmarkRunner = LlmBenchmarkRunner(
+                                context = app,
+                                engine = app.llmEngine,
+                                dispatchers = app.dispatchers
+                            )
                         )
+                    }
+                    SettingsScreen(
+                        viewModel = settingsViewModel,
+                        onNavigateBack = { backStack.removeLastOrNull() }
                     )
                 }
-                SettingsScreen(
-                    viewModel = settingsViewModel,
-                    onNavigateBack = { backStack.removeLastOrNull() }
-                )
             }
         }
     )

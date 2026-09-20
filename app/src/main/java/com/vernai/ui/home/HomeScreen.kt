@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,13 +24,8 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PointOfSale
 import androidx.compose.material.icons.filled.RecordVoiceOver
-import androidx.compose.material.icons.filled.ReportProblem
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -45,11 +39,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -65,72 +58,72 @@ fun HomeScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
-    var showOfflineInspectionDialog by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-
-    if (showOfflineInspectionDialog) {
-        OfflineInspectionDialog(
-            state = state,
-            onDismiss = { showOfflineInspectionDialog = false }
-        )
-    }
-
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = "VernAI",
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text(
-                                text = state.activeLanguage.nativeName,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
+                    Text(
+                        text = "VernAI",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 },
                 actions = {
                     IconButton(onClick = { onNavigate(VernAiNavDestination.Settings) }) {
                         Icon(
                             imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings",
-                            tint = MaterialTheme.colorScheme.onSurface
+                            contentDescription = "అమరికలు",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         },
-        floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = { onNavigate(VernAiNavDestination.VoiceWorkspace) },
-                icon = { Icon(imageVector = Icons.Default.Mic, contentDescription = null) },
-                text = { Text("మాట్లాడండి (Voice AI)") },
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White
-            )
-        },
+        containerColor = MaterialTheme.colorScheme.background,
         modifier = modifier
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+                .padding(horizontal = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+
+            // ── Greeting ───────────────────────────────────────────────
             item {
-                Spacer(modifier = Modifier.height(2.dp))
-                // Quick Language Selector Row
+                Spacer(modifier = Modifier.height(8.dp))
+                val greetingTitle = when (state.activeLanguage) {
+                    Language.TAMIL -> "வணக்கம் 👋"
+                    Language.HINDI, Language.MARATHI -> "नमस्ते 👋"
+                    Language.ENGLISH -> "Welcome 👋"
+                    else -> "స్వాగతం 👋"
+                }
+                val greetingSubtitle = when (state.activeLanguage) {
+                    Language.TAMIL -> "உங்கள் மொழியில் பேசுங்கள். வேலை எளிதாக முடியும்."
+                    Language.HINDI, Language.MARATHI -> "अपनी भाषा में बोलें। काम आसानी से पूरा होगा।"
+                    Language.ENGLISH -> "Speak in your language. Get work done completely offline."
+                    else -> "మీ భాషలో మాట్లాడండి. పని పూర్తవుతుంది."
+                }
+                Text(
+                    text = greetingTitle,
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(
+                    text = greetingSubtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // ── Language chips ─────────────────────────────────────────
+            item {
+                Spacer(modifier = Modifier.height(4.dp))
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -138,197 +131,81 @@ fun HomeScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Language.entries.forEach { lang ->
-                        val isSelected = lang == state.activeLanguage
+                        val selected = lang == state.activeLanguage
                         FilterChip(
-                            selected = isSelected,
+                            selected = selected,
                             onClick = { viewModel.handleIntent(HomeUiIntent.SelectLanguage(lang)) },
-                            label = { Text(lang.nativeName) },
+                            label = {
+                                Text(
+                                    text = lang.nativeName,
+                                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                             )
                         )
                     }
                 }
             }
 
+            // ── Section label ─────────────────────────────────────────
             item {
-                OfflineSecurityBanner(
-                    state = state,
-                    onInspect = { showOfflineInspectionDialog = true }
-                )
-            }
-
-            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                val sectionTitle = when (state.activeLanguage) {
+                    Language.TAMIL -> "என்ன செய்ய வேண்டும்?"
+                    Language.HINDI, Language.MARATHI -> "क्या करना चाहते हैं?"
+                    Language.ENGLISH -> "What would you like to do?"
+                    else -> "ఏం చేయాలి?"
+                }
                 Text(
-                    text = "Core Productivity Features",
+                    text = sectionTitle,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
             }
 
+            // ── Feature tiles ─────────────────────────────────────────
             items(state.features) { feature ->
-                FeatureCard(
+                FeatureTile(
                     feature = feature,
                     onClick = { onNavigate(feature.destination) }
                 )
             }
 
+            // ── History counts ────────────────────────────────────────
             item {
-                StatsCard(state = state)
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(80.dp)) // Headroom for FAB
+                Spacer(modifier = Modifier.height(4.dp))
+                HistoryRow(state = state)
+                Spacer(modifier = Modifier.height(24.dp))
             }
         }
     }
 }
 
-@Composable
-fun OfflineSecurityBanner(
-    state: HomeUiState,
-    onInspect: () -> Unit = {}
-) {
-    Card(
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF0F766E).copy(alpha = 0.12f)),
-        shape = RoundedCornerShape(16.dp),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onInspect)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(CircleShape)
-                    .background(Color(0xFF0F766E)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(22.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "100% Offline AI Perimeter",
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = Color(0xFF0F766E)
-                )
-                Text(
-                    text = "Zero internet connectivity required. Tap to inspect security audit.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Surface(
-                color = Color(0xFF0F766E).copy(alpha = 0.2f),
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Text(
-                    text = "పరిశీలన",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Color(0xFF0F766E),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                )
-            }
-        }
-    }
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// Feature tile — icon + title + one-line description; no technical jargon
+// ─────────────────────────────────────────────────────────────────────────────
 
 @Composable
-fun OfflineInspectionDialog(
-    state: HomeUiState,
-    onDismiss: () -> Unit
-) {
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                imageVector = Icons.Default.Security,
-                contentDescription = null,
-                tint = Color(0xFF0F766E),
-                modifier = Modifier.size(36.dp)
-            )
-        },
-        title = {
-            Text(
-                text = "ఆఫ్‌లైన్ భద్రతా తనిఖీ\n(Offline Security & Privacy Audit)",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Text(
-                    text = "VernAI ఏ సమయములోనూ ఇంటర్నెట్ వినియోగించదు. క్రింది అంశాలు నిరూపితమైన భద్రతను తెలుపుతున్నాయి:",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                val auditPoints = listOf(
-                    "ఇంటర్నెట్ అనుమతి (Internet Permission)" to "NOT REQUESTED (0 నెట్‌వర్క్ సాకెట్లు)",
-                    "ఆడియో ASR (On-Device Speech)" to "Microsoft ONNX + ARM NEON స్థానికంగా",
-                    "స్థానిక LLM (Local Text AI)" to "Snapdragon Kryo గోల్డ్ కోర్లు (Qwen2.5 / Gemma)",
-                    "డేటా నిల్వ (Data Storage)" to "ఎన్‌క్రిప్టెడ్ SQLite Room DB (ఫోన్‌లోనే)",
-                    "టెలిమెట్రీ / క్లౌడ్ లాగింగ్" to "పూర్తిగా నిలిపివేయబడింది (0 బయటి అభ్యర్థనలు)",
-                    "మోడల్ సమగ్రత (Integrity)" to "SHA-256 చెక్‌సమ్ ధృవీకరించబడింది"
-                )
-
-                auditPoints.forEach { (title, detail) ->
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Text(text = title, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                            Text(text = "• $detail", fontSize = 11.sp, color = Color(0xFF0F766E))
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.Button(onClick = onDismiss) {
-                Text("సరే (Understood)")
-            }
-        }
-    )
-}
-
-@Composable
-fun FeatureCard(
+fun FeatureTile(
     feature: FeatureCardItem,
     onClick: () -> Unit
 ) {
-    val icon = when (feature.id) {
-        "voice" -> Icons.Default.RecordVoiceOver
-        "sales" -> Icons.Default.PointOfSale
-        "complaint" -> Icons.Default.ReportProblem
-        "doc" -> Icons.Default.Description
-        else -> Icons.Default.Mic
+    val icon: ImageVector = when (feature.id) {
+        "voice"     -> Icons.Default.RecordVoiceOver
+        "sales"     -> Icons.Default.PointOfSale
+        "complaint" -> Icons.Default.Mic
+        "doc"       -> Icons.Default.Description
+        else        -> Icons.Default.Mic
     }
 
-    Card(
+    Surface(
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -337,10 +214,11 @@ fun FeatureCard(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Coloured icon bubble
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(12.dp))
+                    .size(50.dp)
+                    .clip(RoundedCornerShape(14.dp))
                     .background(MaterialTheme.colorScheme.primaryContainer),
                 contentAlignment = Alignment.Center
             ) {
@@ -354,17 +232,11 @@ fun FeatureCard(
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = feature.title,
-                    fontWeight = FontWeight.Bold,
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Text(
                     text = feature.nativeSubtitle,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.titleSmall
                 )
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     text = feature.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -375,39 +247,50 @@ fun FeatureCard(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// History row — three compact counts at the bottom
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-fun StatsCard(state: HomeUiState) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-        modifier = Modifier.fillMaxWidth()
+fun HistoryRow(state: HomeUiState) {
+    val salesLabel = when (state.activeLanguage) {
+        Language.TAMIL -> "விற்பனை"
+        Language.HINDI, Language.MARATHI -> "बिक्री"
+        Language.ENGLISH -> "Sales"
+        else -> "అమ్మకాలు"
+    }
+    val complaintsLabel = when (state.activeLanguage) {
+        Language.TAMIL -> "மனுக்கள்"
+        Language.HINDI, Language.MARATHI -> "शिकायतें"
+        Language.ENGLISH -> "Complaints"
+        else -> "ఫిర్యాదులు"
+    }
+    val docsLabel = when (state.activeLanguage) {
+        Language.TAMIL -> "ஆவணங்கள்"
+        Language.HINDI, Language.MARATHI -> "दस्तावेज़"
+        Language.ENGLISH -> "Documents"
+        else -> "పత్రాలు"
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceAround
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = "Local Ledger & History Stats",
-                fontWeight = FontWeight.SemiBold,
-                style = MaterialTheme.typography.titleSmall
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceAround
-            ) {
-                StatColumn(label = "Sales Logs", value = state.totalSalesRecorded.toString())
-                StatColumn(label = "Complaints", value = state.totalComplaintsDrafted.toString())
-                StatColumn(label = "Docs Read", value = state.totalDocumentsRead.toString())
-            }
-        }
+        HistoryStat(count = state.totalSalesRecorded, label = salesLabel)
+        VerticalDivider()
+        HistoryStat(count = state.totalComplaintsDrafted, label = complaintsLabel)
+        VerticalDivider()
+        HistoryStat(count = state.totalDocumentsRead, label = docsLabel)
     }
 }
 
 @Composable
-fun StatColumn(label: String, value: String) {
+private fun HistoryStat(count: Int, label: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = value,
+            text = count.toString(),
             fontWeight = FontWeight.Bold,
-            fontSize = 20.sp,
+            fontSize = 22.sp,
             color = MaterialTheme.colorScheme.primary
         )
         Text(
@@ -416,4 +299,13 @@ fun StatColumn(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+@Composable
+private fun VerticalDivider() {
+    Box(
+        modifier = Modifier
+            .size(width = 1.dp, height = 36.dp)
+            .background(MaterialTheme.colorScheme.outlineVariant)
+    )
 }

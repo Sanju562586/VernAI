@@ -13,18 +13,20 @@ import com.vernai.core.model.Language
 import com.vernai.core.model.SalesLog
 import com.vernai.domain.repository.SalesLogRepository
 import com.vernai.sales.processing.DuplicatePreventionEngine
+import com.vernai.sales.processing.MultilingualSalesParser
 import com.vernai.sales.processing.SalesArithmeticValidator
 import com.vernai.sales.processing.TeluguSalesParser
 import kotlinx.coroutines.withContext
 
 /**
- * UseCase coordinating deterministic Telugu number parsing, arithmetic validation,
- * duplicate prevention, and fallback to local LLM only for semantic extraction where necessary.
+ * UseCase coordinating deterministic multilingual (Telugu, Tamil, Hindi, English) number parsing,
+ * arithmetic validation, duplicate prevention, and fallback to local LLM only for semantic extraction where necessary.
  */
 class ExtractSalesLogUseCase(
     private val llmEngine: LlmInferenceEngine,
     private val parser: SalesLogParser = SalesLogParser(),
     private val teluguParser: TeluguSalesParser = TeluguSalesParser(),
+    private val multilingualParser: MultilingualSalesParser = MultilingualSalesParser(teluguParser = teluguParser),
     private val repository: SalesLogRepository,
     private val inferenceLock: InferenceLock = InferenceLock(),
     private val dispatchers: VernAiDispatchers = DefaultVernAiDispatchers()
@@ -34,39 +36,42 @@ class ExtractSalesLogUseCase(
         language: Language = Language.TELUGU
     ): VernAiResult<SalesLog> = withContext(dispatchers.default) {
         if (spokenTranscript.isBlank()) {
-            return@withContext VernAiResult.Error(IllegalArgumentException("వాయిస్ రికార్డింగ్ ఖాళీగా ఉంది (Spoken transcript cannot be empty)"))
+            val emptyMsg = when (language) {
+                Language.TAMIL -> "குரல் பதிவு காலியாக உள்ளது (Spoken transcript cannot be empty)"
+                Language.HINDI, Language.MARATHI -> "आवाज रिकॉर्डिंग खाली है (Spoken transcript cannot be empty)"
+                Language.ENGLISH -> "Spoken transcript cannot be empty"
+                else -> "వాయిస్ రికార్డింగ్ ఖాళీగా ఉంది (Spoken transcript cannot be empty)"
+            }
+            return@withContext VernAiResult.Error(IllegalArgumentException(emptyMsg))
         }
 
-        // STEP 1: Fast Deterministic Parsing for Telugu
-        if (language == Language.TELUGU) {
-            val deterministicItems = teluguParser.parseTranscript(spokenTranscript)
+        // STEP 1: Fast Deterministic Parsing across Indic and English languages
+        val deterministicItems = multilingualParser.parseTranscript(spokenTranscript, language)
 
-            // If deterministic parser found valid items with real item names or quantities/prices
-            val hasMeaningfulItems = deterministicItems.isNotEmpty() && deterministicItems.any {
-                it.quantity > 0 || it.totalPrice > 0 || it.originalTerm != "వస్తువు"
+        val hasMeaningfulItems = deterministicItems.isNotEmpty() && deterministicItems.any {
+            it.quantity > 0 || it.totalPrice > 0 || (it.originalTerm !in listOf("వస్తువు", "பொருள்", "सामग्री", "Item"))
+        }
+
+        if (hasMeaningfulItems) {
+            // Run localized arithmetic validation & reconciliation on each item
+            val reconciledItems = deterministicItems.map { rawItem ->
+                SalesArithmeticValidator.validateAndReconcile(rawItem, language).item
             }
 
-            if (hasMeaningfulItems) {
-                // Run arithmetic validation & reconciliation on each item
-                val reconciledItems = deterministicItems.map { rawItem ->
-                    SalesArithmeticValidator.validateAndReconcile(rawItem).item
-                }
+            // Check and flag duplicate entries in the same ledger
+            val finalItems = DuplicatePreventionEngine.flagDuplicates(reconciledItems, language)
+            val grandTotal = finalItems.sumOf { it.totalPrice }
 
-                // Check and flag duplicate entries in the same ledger
-                val finalItems = DuplicatePreventionEngine.flagDuplicates(reconciledItems)
-                val grandTotal = finalItems.sumOf { it.totalPrice }
+            val salesLog = SalesLog(
+                rawSpokenText = spokenTranscript,
+                detectedLanguage = language,
+                items = finalItems,
+                grandTotal = grandTotal
+            )
 
-                val salesLog = SalesLog(
-                    rawSpokenText = spokenTranscript,
-                    detectedLanguage = language,
-                    items = finalItems,
-                    grandTotal = grandTotal
-                )
-
-                // Persist offline to Room
-                repository.saveSalesLog(salesLog)
-                return@withContext VernAiResult.Success(salesLog)
-            }
+            // Persist offline to Room
+            repository.saveSalesLog(salesLog)
+            return@withContext VernAiResult.Success(salesLog)
         }
 
         // STEP 2: Local LLM semantic extraction when syntax is complex or ambiguous
@@ -93,8 +98,8 @@ class ExtractSalesLogUseCase(
             }
             is VernAiResult.Error -> {
                 // If LLM fails, return deterministic best-effort rather than failing completely
-                val fallbackItems = teluguParser.parseTranscript(spokenTranscript).map {
-                    SalesArithmeticValidator.validateAndReconcile(it).item
+                val fallbackItems = multilingualParser.parseTranscript(spokenTranscript, language).map {
+                    SalesArithmeticValidator.validateAndReconcile(it, language).item
                 }
                 if (fallbackItems.isNotEmpty()) {
                     val log = SalesLog(

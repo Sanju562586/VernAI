@@ -124,12 +124,8 @@ class OfflineDocumentProcessorImpl(
     }
 
     private fun detectLanguage(text: String, hint: Language?): Language {
-        val hasTelugu = text.any { it.code in 0x0C00..0x0C7F }
-        return when {
-            hasTelugu -> Language.TELUGU
-            hint != null -> hint
-            else -> Language.ENGLISH
-        }
+        if (hint != null) return hint
+        return Language.detectFromText(text)
     }
 
     private fun getMimeType(fileName: String): String {

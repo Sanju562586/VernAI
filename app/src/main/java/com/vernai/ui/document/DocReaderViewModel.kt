@@ -21,6 +21,7 @@ import com.vernai.document.processing.TestDocumentType
 import com.vernai.document.processing.TestDocuments
 import com.vernai.domain.repository.DocumentRepository
 import com.vernai.domain.usecase.ExplainDocumentUseCase
+import com.vernai.domain.usecase.FormFillingGuidance
 import com.vernai.ui.common.MviViewModel
 import kotlinx.coroutines.launch
 import java.io.File
@@ -41,13 +42,23 @@ class DocReaderViewModel(
     )
 
     init {
-        // Load initial default sample
-        handleIntent(DocReaderUiIntent.ImportTestDocument(TestDocumentType.REVENUE_PATTADAR_NOTICE))
+        // Load scholarship guidelines by default to demonstrate student form explainer
+        handleIntent(DocReaderUiIntent.ImportTestDocument(TestDocumentType.SCHOLARSHIP_APPLICATION_FORM))
     }
 
     override fun handleIntent(intent: DocReaderUiIntent) {
         when (intent) {
-            is DocReaderUiIntent.ChangeLanguage -> setState { copy(activeLanguage = intent.language) }
+            is DocReaderUiIntent.ChangeLanguage -> {
+                val extracted = uiState.value.extractedDocument
+                val guide = extracted?.let { explainUseCase.extractFormFillingGuide(it.rawText, intent.language) }
+                setState {
+                    copy(
+                        activeLanguage = intent.language,
+                        formFillingGuidance = guide
+                    )
+                }
+                summarizeCurrentDocument()
+            }
             is DocReaderUiIntent.ToggleRawText -> setState { copy(showRawText = !showRawText) }
             is DocReaderUiIntent.ImportTestDocument -> importTestDocument(intent.type)
             is DocReaderUiIntent.PickDocumentFile -> processPickedBytes(intent.fileName, intent.mimeType, intent.bytes)
@@ -66,6 +77,7 @@ class DocReaderViewModel(
                 isExtracting = true,
                 extractionError = null,
                 explanationReport = null,
+                formFillingGuidance = null,
                 selectedChunk = null,
                 selectedSnippetExplanation = null,
                 importedDocumentName = fileName
@@ -83,13 +95,15 @@ class DocReaderViewModel(
                         isScanned = extracted.isScannedImage,
                         language = extracted.detectedLanguage
                     )
+                    val guide = explainUseCase.extractFormFillingGuide(extracted.rawText, uiState.value.activeLanguage)
 
                     setState {
                         copy(
                             isExtracting = false,
                             extractedDocument = extracted,
                             chunks = chunks,
-                            qualityReport = quality
+                            qualityReport = quality,
+                            formFillingGuidance = guide
                         )
                     }
                     summarizeCurrentDocument()
@@ -103,7 +117,7 @@ class DocReaderViewModel(
                             chunks = emptyList()
                         )
                     }
-                    sendSideEffect(DocReaderUiSideEffect.ShowToast("పత్రం సంగ్రహణ విఫలమైంది: ${result.message}"))
+                    sendSideEffect(DocReaderUiSideEffect.ShowToast("Extraction failed: ${result.message}"))
                 }
                 is VernAiResult.Loading -> Unit
             }
@@ -112,7 +126,6 @@ class DocReaderViewModel(
 
     private fun importTestDocument(type: TestDocumentType) {
         if (type == TestDocumentType.CORRUPTED_MALFORMED_FILE) {
-            // Intentionally demonstrate graceful extraction failure
             setState {
                 copy(
                     isExtracting = false,
@@ -120,13 +133,14 @@ class DocReaderViewModel(
                     extractedDocument = null,
                     chunks = emptyList(),
                     explanationReport = null,
+                    formFillingGuidance = null,
                     qualityReport = null,
                     selectedChunk = null,
                     selectedSnippetExplanation = null,
-                    extractionError = "పత్రం పాడైంది లేదా చెల్లని ఫార్మాట్ (Corrupted PDF: 0 readable bytes found in file buffer)."
+                    extractionError = "Corrupted PDF: 0 readable bytes found in file buffer."
                 )
             }
-            sendSideEffect(DocReaderUiSideEffect.ShowToast("పరీక్ష: పాడైన ఫైలు గుర్తించబడింది (Corrupted file handled)"))
+            sendSideEffect(DocReaderUiSideEffect.ShowToast("Corrupted file handled safely."))
             return
         }
 
@@ -135,9 +149,10 @@ class DocReaderViewModel(
                 isExtracting = true,
                 extractionError = null,
                 explanationReport = null,
+                formFillingGuidance = null,
                 selectedChunk = null,
                 selectedSnippetExplanation = null,
-                importedDocumentName = "${type.titleTelugu} (${type.fileName})"
+                importedDocumentName = "${type.titleEnglish} (${type.fileName})"
             )
         }
 
@@ -156,13 +171,15 @@ class DocReaderViewModel(
                 isScanned = type.isScanned,
                 language = uiState.value.activeLanguage
             )
+            val guide = explainUseCase.extractFormFillingGuide(rawText, uiState.value.activeLanguage)
 
             setState {
                 copy(
                     isExtracting = false,
                     extractedDocument = extracted,
                     chunks = chunks,
-                    qualityReport = quality
+                    qualityReport = quality,
+                    formFillingGuidance = guide
                 )
             }
 
@@ -185,7 +202,7 @@ class DocReaderViewModel(
                 }
                 is VernAiResult.Error -> {
                     setState { copy(isExplainingSnippet = false) }
-                    sendSideEffect(DocReaderUiSideEffect.ShowToast("వివరణ లోపం: ${result.message}"))
+                    sendSideEffect(DocReaderUiSideEffect.ShowToast("Explanation error: ${result.message}"))
                 }
                 is VernAiResult.Loading -> Unit
             }
@@ -212,7 +229,7 @@ class DocReaderViewModel(
                 }
                 is VernAiResult.Error -> {
                     setState { copy(isSummarizing = false) }
-                    sendSideEffect(DocReaderUiSideEffect.ShowToast("సారాంశం లోపం: ${result.message}"))
+                    sendSideEffect(DocReaderUiSideEffect.ShowToast("Summary error: ${result.message}"))
                 }
                 is VernAiResult.Loading -> Unit
             }

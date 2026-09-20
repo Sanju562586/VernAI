@@ -1,11 +1,8 @@
 package com.vernai.ui.letter
 
 import android.widget.Toast
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,30 +19,22 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
-import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -60,14 +49,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vernai.document.export.ExportFormat
 import com.vernai.domain.model.letter.LetterType
-import com.vernai.ui.common.rememberAudioPermissionState
+import com.vernai.ui.theme.StatusGreen
+import com.vernai.ui.theme.StatusRed
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,41 +80,40 @@ fun LetterEditorScreen(
             when (effect) {
                 is LetterUiSideEffect.ShowToast -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 is LetterUiSideEffect.ShareExportedFile -> {
-                    Toast.makeText(context, "పత్రం సిద్ధమైంది: ${effect.file.name}", Toast.LENGTH_SHORT).show()
                     try {
                         val uri = androidx.core.content.FileProvider.getUriForFile(
-                            context,
-                            "${context.packageName}.fileprovider",
-                            effect.file
+                            context, "${context.packageName}.fileprovider", effect.file
                         )
                         val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                             type = effect.mimeType
                             putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                            putExtra(android.content.Intent.EXTRA_SUBJECT, state.subject.ifBlank { "Formal Telugu Civic Letter" })
-                            putExtra(android.content.Intent.EXTRA_TEXT, "VernAI ద్వారా సిద్ధం చేయబడిన అధికారిక వినతిపత్రం.")
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, state.subject.ifBlank { "అధికారిక వినతిపత్రం" })
                             addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
                         }
-                        context.startActivity(android.content.Intent.createChooser(shareIntent, "వినతిపత్రం పంపండి / Share Letter"))
+                        context.startActivity(android.content.Intent.createChooser(shareIntent, "లేఖ పంచుకోండి"))
                     } catch (e: Exception) {
-                        Toast.makeText(context, "షేర్ చేయడంలో లోపం: ${e.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "లోపం: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
         }
     }
 
+    if (state.showReviewDialog) {
+        ReviewDialog(
+            state    = state,
+            onConfirm = { viewModel.handleIntent(LetterUiIntent.ConfirmReviewAndExport) },
+            onDismiss = { viewModel.handleIntent(LetterUiIntent.DismissReviewDialog) }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text("తెలుగు అధికారిక లేఖ (Letter Drafting)", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("Zero-Hallucination Local Civic AI • 100% Offline", fontSize = 12.sp, color = Color(0xFF0F766E))
-                    }
-                },
+                title = { Text("అధికారిక లేఖ", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "వెనుకకు")
                     }
                 },
                 actions = {
@@ -136,81 +124,56 @@ fun LetterEditorScreen(
                         if (state.isSaving) {
                             CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         } else {
-                            Icon(imageVector = Icons.Default.Save, contentDescription = "Save Draft")
+                            Icon(Icons.Default.Save, contentDescription = "సేవ్")
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
             )
         },
         bottomBar = {
-            LetterBottomActionBar(
-                activeTab = state.activeTab,
+            LetterActionBar(
+                activeTab    = state.activeTab,
                 isGenerating = state.isGenerating,
                 isRegenerating = state.isRegenerating,
-                isSaving = state.isSaving,
-                isExporting = state.isExporting,
-                onGenerate = { viewModel.handleIntent(LetterUiIntent.GenerateLetter) },
+                isSaving     = state.isSaving,
+                isExporting  = state.isExporting,
+                onGenerate   = { viewModel.handleIntent(LetterUiIntent.GenerateLetter) },
                 onRegenerate = { viewModel.handleIntent(LetterUiIntent.RegenerateLetter) },
-                onSave = { viewModel.handleIntent(LetterUiIntent.SaveLetterDraft) },
-                onExportPdf = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.PDF, context.cacheDir)) },
+                onSave       = { viewModel.handleIntent(LetterUiIntent.SaveLetterDraft) },
+                onExportPdf  = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.PDF, context.cacheDir)) },
                 onExportDocx = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.DOCX, context.cacheDir)) }
             )
         },
-        modifier = modifier
+        containerColor = MaterialTheme.colorScheme.background,
+        modifier = modifier.fillMaxSize()
     ) { innerPadding ->
-        if (state.showReviewDialog) {
-            LetterReviewConfirmationDialog(
-                state = state,
-                onConfirm = { viewModel.handleIntent(LetterUiIntent.ConfirmReviewAndExport) },
-                onDismiss = { viewModel.handleIntent(LetterUiIntent.DismissReviewDialog) }
-            )
-        }
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Live Generating Status & Cancellation Banner
+            // Generating banner
             if (state.isGenerating || state.isRegenerating) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    shape = RoundedCornerShape(0.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Surface(color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.fillMaxWidth()) {
                     Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = "స్థానిక AI అధికారిక లేఖను రూపొందిస్తోంది...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.handleIntent(LetterUiIntent.CancelGeneration) }
-                        ) {
-                            Text("రద్దు చేయండి (Cancel)")
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text("లేఖ రూపొందిస్తున్నది…", style = MaterialTheme.typography.bodyMedium)
+                        Spacer(modifier = Modifier.weight(1f))
+                        OutlinedButton(onClick = { viewModel.handleIntent(LetterUiIntent.CancelGeneration) }) {
+                            Text("రద్దు")
                         }
                     }
                 }
             }
 
-            // Error Banner (if any)
+            // Error banner
             if (state.errorMessage != null) {
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    shape = RoundedCornerShape(0.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
+                Surface(color = MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
                     Text(
                         text = state.errorMessage ?: "",
                         color = MaterialTheme.colorScheme.onErrorContainer,
@@ -220,168 +183,101 @@ fun LetterEditorScreen(
                 }
             }
 
-            // 3 Navigation Tabs
+            // Tabs
             TabRow(selectedTabIndex = state.activeTab) {
                 Tab(
                     selected = state.activeTab == 0,
-                    onClick = { viewModel.handleIntent(LetterUiIntent.SwitchTab(0)) },
-                    text = { Text("1. వివరాలు (Inputs)", fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
+                    onClick  = { viewModel.handleIntent(LetterUiIntent.SwitchTab(0)) },
+                    text     = { Text("వివరాలు", fontWeight = FontWeight.SemiBold) }
                 )
                 Tab(
                     selected = state.activeTab == 1,
-                    onClick = { viewModel.handleIntent(LetterUiIntent.SwitchTab(1)) },
-                    text = { Text("2. తెలుగు లేఖ (Preview)", fontWeight = FontWeight.Bold, fontSize = 13.sp) }
+                    onClick  = { viewModel.handleIntent(LetterUiIntent.SwitchTab(1)) },
+                    text     = { Text("తెలుగు లేఖ", fontWeight = FontWeight.Bold) }
                 )
                 Tab(
                     selected = state.activeTab == 2,
-                    onClick = { viewModel.handleIntent(LetterUiIntent.SwitchTab(2)) },
-                    text = { Text("3. English Copy", fontWeight = FontWeight.SemiBold, fontSize = 13.sp) }
+                    onClick  = { viewModel.handleIntent(LetterUiIntent.SwitchTab(2)) },
+                    text     = { Text("English", fontWeight = FontWeight.SemiBold) }
                 )
             }
 
-            // Tab Content
             when (state.activeTab) {
-                0 -> LetterInputsTabContent(state = state, viewModel = viewModel)
-                1 -> LetterTeluguPreviewTabContent(state = state, viewModel = viewModel)
-                2 -> LetterEnglishCopyTabContent(state = state, viewModel = viewModel)
+                0 -> InputsTab(state = state, viewModel = viewModel)
+                1 -> TeluguPreviewTab(state = state, viewModel = viewModel)
+                2 -> EnglishTab(state = state, viewModel = viewModel)
             }
         }
     }
 }
 
-@Composable
-fun LetterInputsTabContent(
-    state: LetterUiState,
-    viewModel: LetterEditorViewModel
-) {
-    val context = LocalContext.current
-    val audioPermissionState = rememberAudioPermissionState {
-        Toast.makeText(context, "వాయిస్ రికార్డింగ్ సిద్ధం (Microphone Ready)", Toast.LENGTH_SHORT).show()
-    }
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 1 — Inputs
+// ─────────────────────────────────────────────────────────────────────────────
 
+@Composable
+fun InputsTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Privacy & Anti-Hallucination Guarantee Banner
-        OutlinedCard(
-            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Security,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column {
-                    Text("100% ఆఫ్‌లైన్ & వాస్తవాల రక్షణ (Zero-Hallucination)", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    Text("మీరు అందించిన వాస్తవాలనే యథాతథంగా ఉపయోగిస్తుంది. పేర్లు, తేదీలు ఊహించబడవు.", fontSize = 11.sp)
-                }
-            }
-        }
-
-        // Quick Load Sample Button
+        // Letter type selector
+        SectionLabel(text = "లేఖ రకం")
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("లేఖ రకం (Letter Type)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-            OutlinedButton(
-                onClick = { viewModel.handleIntent(LetterUiIntent.LoadSampleFacts) },
-                shape = RoundedCornerShape(8.dp)
-            ) {
-                Icon(imageVector = Icons.Default.EditNote, contentDescription = null, modifier = Modifier.size(14.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("నమూనా లోడ్ చేయండి", fontSize = 12.sp)
-            }
-        }
-
-        // Letter Type Chips
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             LetterType.entries.forEach { type ->
-                FilterChip(
-                    selected = state.letterType == type,
+                val selected = state.letterType == type
+                FilledTonalButton(
                     onClick = { viewModel.handleIntent(LetterUiIntent.UpdateLetterType(type)) },
-                    label = { Text(type.teluguTitle, fontSize = 12.sp) }
-                )
+                    shape   = RoundedCornerShape(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = type.teluguTitle,
+                        fontSize = 12.sp,
+                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+                    )
+                }
             }
         }
 
-        // Voice Transcript / Spoken Issue
+        // Spoken issue
+        SectionLabel(text = "సమస్య వివరణ")
         OutlinedTextField(
             value = state.voiceTranscript,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateVoiceTranscript(it)) },
-            label = { Text("వాయిస్ ట్రాన్స్‌క్రిప్ట్ / సమస్య వివరణ (Voice Transcript)") },
-            leadingIcon = { Icon(imageVector = Icons.Default.Mic, contentDescription = null) },
-            trailingIcon = {
-                IconButton(onClick = { audioPermissionState.requestPermission() }) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Microphone Consent",
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            minLines = 2,
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        // User Provided Facts Editor
-        OutlinedTextField(
-            value = state.userFactsText,
-            onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateUserFacts(it)) },
-            label = { Text("వాస్తవాలు & ఆధారాలు (User-Provided Facts - Newline separated)") },
-            supportingText = { Text("ప్రతి వాస్తవాన్ని ప్రత్యేక లైన్‌లో నమోదు చేయండి. మోడల్ ఈ వాస్తవాలను తప్పక భద్రపరుస్తుంది.") },
+            placeholder = { Text("మీ సమస్యను ఇక్కడ రాయండి…") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             shape = RoundedCornerShape(12.dp)
         )
 
-        // Recipient Section
-        Text("స్వీకర్త వివరాలు (Recipient Details)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        // Recipient
+        SectionLabel(text = "స్వీకర్త")
         OutlinedTextField(
             value = state.recipientDesignation,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateRecipientDesignation(it)) },
-            label = { Text("అధికారి హోదా (Recipient Designation)") },
+            placeholder = { Text("అధికారి హోదా (ఉదా: సర్పంచ్)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
         OutlinedTextField(
             value = state.recipientDepartment,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateRecipientDepartment(it)) },
-            label = { Text("శాఖ లేదా కార్యాలయం (Department / Office)") },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        )
-        OutlinedTextField(
-            value = state.recipientAddress,
-            onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateRecipientAddress(it)) },
-            label = { Text("కార్యాలయ చిరునామా (Office Address - Optional)") },
+            placeholder = { Text("శాఖ లేదా కార్యాలయం") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
-        // Metadata: Location & Date
-        Text("ప్రదేశం మరియు తేదీ (Location & Date - Optional)", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+        // Location & date row
+        SectionLabel(text = "స్థలం & తేదీ")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -389,45 +285,45 @@ fun LetterInputsTabContent(
             OutlinedTextField(
                 value = state.location,
                 onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateLocation(it)) },
-                label = { Text("గ్రామం / పట్టణం (Location)") },
+                placeholder = { Text("గ్రామం / పట్టణం") },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
             )
             OutlinedTextField(
                 value = state.date,
                 onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateDate(it)) },
-                label = { Text("తేదీ (Date: DD-MM-YYYY)") },
+                placeholder = { Text("DD-MM-YYYY") },
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(12.dp)
             )
         }
 
-        // Applicant Name
+        // Applicant name
         OutlinedTextField(
             value = state.applicantName,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateApplicantName(it)) },
-            label = { Text("దరఖాస్తుదారుడి పేరు / గ్రామం (Applicant Name - Optional)") },
+            placeholder = { Text("దరఖాస్తుదారుడి పేరు (ఐచ్ఛికం)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
-        // Generate Action Button
+        // Generate button
         Button(
             onClick = { viewModel.handleIntent(LetterUiIntent.GenerateLetter) },
             enabled = !state.isGenerating,
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
+                .padding(vertical = 4.dp)
         ) {
             if (state.isGenerating) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("విశ్లేషిస్తూ లేఖ రచిస్తున్నది...")
+                Text("రూపొందిస్తున్నది…")
             } else {
-                Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null)
+                Icon(Icons.Default.AutoAwesome, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("వినతిపత్రం రూపొందించండి (Generate Formal Letter)")
+                Text("లేఖ రూపొందించండి")
             }
         }
 
@@ -435,141 +331,63 @@ fun LetterInputsTabContent(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 2 — Telugu preview
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-fun LetterTeluguPreviewTabContent(
-    state: LetterUiState,
-    viewModel: LetterEditorViewModel
-) {
+fun TeluguPreviewTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Anti-Hallucination Draft & Verification Watermark Banner
-        OutlinedCard(
-            colors = CardDefaults.outlinedCardColors(
-                containerColor = if (state.isUserReviewed) Color(0xFFF0FDF4) else Color(0xFFFEF2F2)
-            ),
-            shape = RoundedCornerShape(12.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier.padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = if (state.isUserReviewed) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
-                    contentDescription = null,
-                    tint = if (state.isUserReviewed) Color(0xFF16A34A) else Color(0xFFDC2626),
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = if (state.isUserReviewed) "ధృవీకరించబడింది (Reviewed & Verified)" else "[చిత్తు ప్రతి - ధృవీకరణ అవసరం] Draft Copy",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        color = if (state.isUserReviewed) Color(0xFF15803D) else Color(0xFFB91C1C)
-                    )
-                    Text(
-                        text = if (state.isUserReviewed) "మీరు ఈ లేఖలోని వాస్తవాలను సరిచూశారు. అధికారిక సమర్పణకు సిద్ధం."
-                               else "ఇది స్థానిక AI రూపొందించిన చిత్తు ప్రతి. ఎగుమతి చేయడానికి ముందు దరఖాస్తుదారుడి పేర్లు, తేదీలు మరియు వాస్తవాలను సరిచూడండి.",
-                        fontSize = 11.sp,
-                        color = if (state.isUserReviewed) Color(0xFF166534) else Color(0xFF991B1B)
-                    )
-                }
-                Spacer(modifier = Modifier.width(6.dp))
-                FilterChip(
-                    selected = state.isUserReviewed,
-                    onClick = { viewModel.handleIntent(LetterUiIntent.SetUserReviewed(!state.isUserReviewed)) },
-                    label = { Text(if (state.isUserReviewed) "ధృవీకరించబడింది ✓" else "సరిచూడండి ⚠️", fontSize = 11.sp) }
-                )
-            }
-        }
+        // Review banner — compact, colour-coded
+        ReviewBanner(
+            isReviewed = state.isUserReviewed,
+            onToggle   = { viewModel.handleIntent(LetterUiIntent.SetUserReviewed(!state.isUserReviewed)) }
+        )
 
-        // Preserved Facts Verification Card
-        if (state.preservedFacts.isNotEmpty()) {
-            ElevatedCard(
-                colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f)),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("ధృవీకరించిన వాస్తవాలు (Preserved User Facts)", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        state.preservedFacts.forEach { fact ->
-                            SuggestionChip(
-                                onClick = {},
-                                label = { Text(fact, fontSize = 11.sp, maxLines = 1) }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Editable Subject
+        // Editable fields
         OutlinedTextField(
             value = state.subject,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateSubject(it)) },
-            label = { Text("విషయము (Subject Line)") },
+            placeholder = { Text("విషయము") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
-
-        // Editable Salutation
         OutlinedTextField(
             value = state.salutation,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateSalutation(it)) },
-            label = { Text("సంబోధన (Salutation)") },
+            placeholder = { Text("సంబోధన") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
-
-        // Full Editable Formal Telugu Letter Body
         OutlinedTextField(
             value = state.vernacularBody,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateVernacularBody(it)) },
-            label = { Text("తెలుగు అధికారిక లేఖ ముఖ్య భాగం (Full Editable Telugu Letter)") },
+            placeholder = { Text("లేఖ మొత్తం…") },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(340.dp),
+                .height(320.dp),
             shape = RoundedCornerShape(12.dp),
             textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 26.sp)
         )
-
-        // Editable Closing Statement
         OutlinedTextField(
             value = state.closing,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateClosing(it)) },
-            label = { Text("ముగింపు (Formal Closing)") },
+            placeholder = { Text("ముగింపు") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
-
-        // Editable Signature Placeholders
         OutlinedTextField(
             value = state.signaturePlaceholder,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateSignaturePlaceholder(it)) },
-            label = { Text("సంతకం మరియు దరఖాస్తుదారుడి వివరాలు (Signature Placeholders)") },
+            placeholder = { Text("సంతకం / దరఖాస్తుదారుడి వివరాలు") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
@@ -578,43 +396,40 @@ fun LetterTeluguPreviewTabContent(
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Tab 3 — English copy
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-fun LetterEnglishCopyTabContent(
-    state: LetterUiState,
-    viewModel: LetterEditorViewModel
-) {
+fun EnglishTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 20.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Spacer(modifier = Modifier.height(4.dp))
-
-        Text(
-            "అధికారిక ఆంగ్ల అనువాదం (Formal English Translation)",
-            fontWeight = FontWeight.Bold,
-            fontSize = 14.sp
-        )
-
+        Spacer(modifier = Modifier.height(8.dp))
         OutlinedTextField(
             value = state.englishTranslation,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateEnglishTranslation(it)) },
-            label = { Text("Formal English Translation (Editable)") },
+            placeholder = { Text("Formal English translation…") },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(420.dp),
             shape = RoundedCornerShape(12.dp),
             textStyle = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp)
         )
-
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Bottom action bar
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-fun LetterBottomActionBar(
+fun LetterActionBar(
     activeTab: Int,
     isGenerating: Boolean,
     isRegenerating: Boolean,
@@ -626,88 +441,113 @@ fun LetterBottomActionBar(
     onExportPdf: () -> Unit,
     onExportDocx: () -> Unit
 ) {
-    Card(
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+    Surface(
+        tonalElevation = 6.dp,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Left action — Generate or Regenerate
             if (activeTab == 0) {
-                Button(
+                OutlinedButton(
                     onClick = onGenerate,
                     enabled = !isGenerating,
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.weight(1f)
                 ) {
                     if (isGenerating) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(imageVector = Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("రూపొందించండి (Generate)")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("రూపొందించు")
                 }
             } else {
                 OutlinedButton(
                     onClick = onRegenerate,
                     enabled = !isRegenerating,
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.weight(1f)
                 ) {
                     if (isRegenerating) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                     } else {
-                        Icon(imageVector = Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("తిరిగి రాయండి (Regenerate)")
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("తిరిగి రాయి")
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilledTonalButton(
-                    onClick = onSave,
-                    enabled = !isSaving,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    if (isSaving) {
-                        CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
-                    } else {
-                        Icon(imageVector = Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
-                    }
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("సేవ్")
+            // Save
+            FilledTonalButton(onClick = onSave, enabled = !isSaving) {
+                if (isSaving) {
+                    CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                } else {
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
                 }
+            }
 
-                FilledTonalButton(
-                    onClick = onExportDocx,
-                    enabled = !isExporting,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Text("DOCX")
-                }
+            // DOCX
+            FilledTonalButton(onClick = onExportDocx, enabled = !isExporting) {
+                Text("DOCX", fontSize = 12.sp)
+            }
 
-                Button(
-                    onClick = onExportPdf,
-                    enabled = !isExporting,
-                    shape = RoundedCornerShape(10.dp)
-                ) {
-                    Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("PDF")
-                }
+            // PDF
+            Button(onClick = onExportPdf, enabled = !isExporting) {
+                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text("PDF", fontSize = 12.sp)
             }
         }
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Review banner — replaces the old verbose OutlinedCard
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
-fun LetterReviewConfirmationDialog(
+fun ReviewBanner(isReviewed: Boolean, onToggle: () -> Unit) {
+    Surface(
+        color = if (isReviewed) StatusGreen.copy(alpha = 0.12f) else StatusRed.copy(alpha = 0.10f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = if (isReviewed) Icons.Default.CheckCircle else Icons.Default.WarningAmber,
+                contentDescription = null,
+                tint = if (isReviewed) StatusGreen else StatusRed,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = if (isReviewed) "సరిచూడబడింది — ఎగుమతికి సిద్ధం" else "ఎగుమతికి ముందు లేఖ సరిచూడండి",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = if (isReviewed) StatusGreen else StatusRed,
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Checkbox(checked = isReviewed, onCheckedChange = { onToggle() })
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Review/export confirmation dialog
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+fun ReviewDialog(
     state: LetterUiState,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
@@ -716,86 +556,56 @@ fun LetterReviewConfirmationDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        icon = {
-            Icon(
-                imageVector = Icons.Default.Security,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-            )
-        },
-        title = {
-            Text(
-                "లేఖ సమీక్ష మరియు ధృవీకరణ\n(Review Required Before Export)",
-                fontWeight = FontWeight.Bold,
-                fontSize = 16.sp
-            )
-        },
+        title = { Text("ఎగుమతి చేయడానికి ముందు ధృవీకరించండి", fontWeight = FontWeight.Bold) },
         text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-            ) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = "భద్రతా నిబంధన: కల్పిత సమాచారం (LLM Hallucinations) నివారణకు, ఎగుమతికి ముందు మీ వాస్తవాలను తప్పక సరిచూడాలి.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    "దరఖాస్తుదారు: ${state.applicantName.ifBlank { "—" }}",
+                    style = MaterialTheme.typography.bodySmall
                 )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(10.dp)) {
-                        Text("సరిచూడవలసిన వివరాలు (Key Facts to Verify):", fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text("• దరఖాస్తుదారు: ${state.applicantName.ifBlank { "పేరు నమోదు కాలేదు [Placeholders used]" }}", fontSize = 11.sp)
-                        Text("• అధికారి/కార్యాలయం: ${state.recipientDesignation}, ${state.recipientDepartment}", fontSize = 11.sp)
-                        Text("• తేదీ & స్థలం: ${state.date} | ${state.location}", fontSize = 11.sp)
-                        if (state.preservedFacts.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text("• పొందుపరచిన వాస్తవాలు:", fontWeight = FontWeight.SemiBold, fontSize = 11.sp)
-                            state.preservedFacts.forEach { fact ->
-                                Text("   - $fact", fontSize = 11.sp, color = MaterialTheme.colorScheme.primary)
-                            }
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Checkbox(
-                        checked = confirmed,
-                        onCheckedChange = { confirmed = it }
-                    )
+                Text(
+                    "అధికారి: ${state.recipientDesignation}, ${state.recipientDepartment}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "తేదీ & స్థలం: ${state.date} | ${state.location}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = confirmed, onCheckedChange = { confirmed = it })
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = "నేను ఈ లేఖలోని వాస్తవాలను పూర్తిగా సరిచూశాను. ఎటువంటి కల్పితాలు లేవని ధృవీకరిస్తున్నాను.",
-                        fontSize = 12.sp,
+                        "లేఖలోని అన్ని వాస్తవాలు సరైనవని ధృవీకరిస్తున్నాను.",
+                        style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium
                     )
                 }
             }
         },
         confirmButton = {
-            Button(
-                onClick = onConfirm,
-                enabled = confirmed
-            ) {
-                Text("సరిచూశాను & ఎగుమతి చేయి (Confirm & Export)")
+            Button(onClick = onConfirm, enabled = confirmed) {
+                Text("ఎగుమతి చేయి")
             }
         },
         dismissButton = {
             OutlinedButton(onClick = onDismiss) {
-                Text("మరిన్ని సవరణలు (Edit Draft)")
+                Text("సవరించు")
             }
         }
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = MaterialTheme.colorScheme.onSurfaceVariant
     )
 }

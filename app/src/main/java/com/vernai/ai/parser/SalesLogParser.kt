@@ -44,22 +44,29 @@ class SalesLogParser {
             json.decodeFromString<RawSalesJson>(cleanJson)
         }.getOrDefault(RawSalesJson())
 
+        val defaultTerm = when (language) {
+            Language.TAMIL -> "பொருள்"
+            Language.HINDI, Language.MARATHI -> "सामग्री"
+            Language.ENGLISH -> "Item"
+            else -> "వస్తువు"
+        }
+
         val rawItems = parsed.items.map { raw ->
             val rawItem = SalesItem(
                 id = UUID.randomUUID().toString(),
                 date = raw.date,
-                originalTerm = raw.original_term.ifBlank { "వస్తువు" },
-                standardName = raw.standard_name.ifBlank { raw.original_term },
+                originalTerm = raw.original_term.ifBlank { defaultTerm },
+                standardName = raw.standard_name.ifBlank { raw.original_term.ifBlank { defaultTerm } },
                 quantity = raw.quantity,
                 unit = raw.unit,
                 unitPrice = raw.unit_price,
                 totalPrice = raw.total_price,
                 notes = raw.notes
             )
-            com.vernai.sales.processing.SalesArithmeticValidator.validateAndReconcile(rawItem).item
+            com.vernai.sales.processing.SalesArithmeticValidator.validateAndReconcile(rawItem, language).item
         }
 
-        val checkedItems = com.vernai.sales.processing.DuplicatePreventionEngine.flagDuplicates(rawItems)
+        val checkedItems = com.vernai.sales.processing.DuplicatePreventionEngine.flagDuplicates(rawItems, language)
         val grandTotal = checkedItems.sumOf { it.totalPrice }
 
         return SalesLog(

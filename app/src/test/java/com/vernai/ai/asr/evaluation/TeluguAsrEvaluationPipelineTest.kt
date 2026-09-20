@@ -78,6 +78,16 @@ class TeluguAsrEvaluationPipelineTest {
     }
 
     @Test
+    fun testTeluguNormalizerAgrarianAndRevenueTerms() {
+        val ruralInput = "రైతుబంధు పైసలు మరియు బోరు మోటార్ గిట్టుబాటు ధర"
+        val normalized = TeluguTextNormalizer.normalize(ruralInput, NormalizationMode.DIALECT_AWARE)
+        assertTrue(normalized.contains("రైతు భరోసా"))
+        assertTrue(normalized.contains("బోరుబావి"))
+        assertTrue(normalized.contains("మోటారు"))
+        assertTrue(normalized.contains("మద్దతు ధర"))
+    }
+
+    @Test
     fun testDatasetIntegrityAndDomainCoverage() {
         val dataset = TeluguEvaluationDataset.utterances
         assertEquals(16, dataset.size)

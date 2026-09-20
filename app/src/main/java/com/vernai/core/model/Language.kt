@@ -19,10 +19,14 @@ enum class Language(
     GUJARATI("gu", "ગુજરાતી", "Gujarati", 0x0A80L..0x0AFFL),
     ENGLISH("en", "English", "English", 0x0020L..0x007FL);
 
+    val bcp47: String get() = isoCode
+
     companion object {
         fun fromIso(code: String): Language {
             return entries.firstOrNull { it.isoCode.equals(code, ignoreCase = true) } ?: TELUGU
         }
+
+        fun fromBcp47(code: String): Language = fromIso(code)
 
         /**
          * Detects language family by examining character code points in the text.

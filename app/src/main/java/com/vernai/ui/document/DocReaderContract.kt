@@ -27,6 +27,7 @@ data class DocReaderUiState(
     val formFillingGuidance: FormFillingGuidance? = null,
     val qualityReport: DocumentQualityReport? = null,
     val showRawText: Boolean = false,
+    val isSpeaking: Boolean = false,
     val extractionError: String? = null
 ) : UiState
 
@@ -41,9 +42,13 @@ sealed interface DocReaderUiIntent : UiIntent {
     data object ProcessDocumentExplanation : DocReaderUiIntent
     data class ExportExplanation(val cacheDir: File) : DocReaderUiIntent
     data object ClearError : DocReaderUiIntent
+    data object ToggleSpeech : DocReaderUiIntent
+    data class SetSpeakingState(val isSpeaking: Boolean) : DocReaderUiIntent
 }
 
 sealed interface DocReaderUiSideEffect : UiSideEffect {
     data class ShowToast(val message: String) : DocReaderUiSideEffect
     data class OpenExportedFile(val file: File) : DocReaderUiSideEffect
+    data class SpeakText(val text: String, val language: Language) : DocReaderUiSideEffect
+    data object StopSpeaking : DocReaderUiSideEffect
 }

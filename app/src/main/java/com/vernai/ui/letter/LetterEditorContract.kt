@@ -43,6 +43,7 @@ data class LetterUiState(
     val isUserReviewed: Boolean = false,
     val showReviewDialog: Boolean = false,
     val pendingExportFormat: ExportFormat? = null,
+    val isSpeaking: Boolean = false,
     val errorMessage: String? = null
 ) : UiState
 
@@ -73,6 +74,9 @@ sealed interface LetterUiIntent : UiIntent {
     data object SaveLetterDraft : LetterUiIntent
     data class ExportDocument(val format: ExportFormat, val cacheDir: File) : LetterUiIntent
     data class RequestExport(val format: ExportFormat, val cacheDir: File) : LetterUiIntent
+    data class PrintLetter(val cacheDir: File) : LetterUiIntent
+    data class SetSpeakingState(val isSpeaking: Boolean) : LetterUiIntent
+    data object ToggleSpeech : LetterUiIntent
     data class SetUserReviewed(val isReviewed: Boolean) : LetterUiIntent
     data object ConfirmReviewAndExport : LetterUiIntent
     data object DismissReviewDialog : LetterUiIntent
@@ -82,4 +86,7 @@ sealed interface LetterUiIntent : UiIntent {
 sealed interface LetterUiSideEffect : UiSideEffect {
     data class ShowToast(val message: String) : LetterUiSideEffect
     data class ShareExportedFile(val file: File, val mimeType: String) : LetterUiSideEffect
+    data class PrintDocument(val file: File) : LetterUiSideEffect
+    data class SpeakText(val text: String, val language: Language) : LetterUiSideEffect
+    data object StopSpeaking : LetterUiSideEffect
 }

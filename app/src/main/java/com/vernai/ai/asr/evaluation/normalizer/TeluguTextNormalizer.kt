@@ -61,10 +61,20 @@ object TeluguTextNormalizer {
         "టమోటాలు" to "టమాటాలు",
         "ఆయిల్" to "నూనె",
         "కరంటు" to "కరెంట్",
-        "రైతులు" to "రైతులు"
+        "కరెంటు" to "కరెంట్",
+        "రైతులు" to "రైతులు",
+        "బోరు" to "బోరుబావి",
+        "మోటార్" to "మోటారు",
+        "పాసుబుక్" to "పాసుపుస్తకం",
+        "పాసుబుక్కు" to "పాసుపుస్తకం",
+        "పంచాయత్" to "పంచాయతీ",
+        "తహసిల్" to "తహశీల్దార్",
+        "తహశీల్" to "తహశీల్దార్",
+        "పహాణి" to "పహాణీ",
+        "పహాని" to "పహాణీ"
     )
 
-    // Dialectal and colloquial verb endings / variants (Telangana & Rayalaseema)
+    // Dialectal and colloquial verb endings / variants (Telangana & Rayalaseema agrarian terms)
     private val DIALECT_VARIANTS = mapOf(
         "అమ్మిన" to "అమ్మినాను",
         "అమ్మాను" to "అమ్మినాను",
@@ -76,7 +86,13 @@ object TeluguTextNormalizer {
         "ఎట్ల" to "ఎలా",
         "సదువు" to "చదువు",
         "యాడికి" to "ఎక్కడికి",
-        "సూడు" to "చూడు"
+        "సూడు" to "చూడు",
+        "రైతుబంధు" to "రైతు భరోసా",
+        "రైతుభరోసా" to "రైతు భరోసా",
+        "గిట్టుబాటు" to "మద్దతు ధర",
+        "కౌలురైతు" to "కౌలు రైతు",
+        "కాంటా" to "ధాన్యం కొనుగోలు కేంద్రం",
+        "వరిచేను" to "వరి పొలం"
     )
 
     /**

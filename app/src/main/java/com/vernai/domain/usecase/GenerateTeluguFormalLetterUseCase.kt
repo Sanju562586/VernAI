@@ -34,12 +34,16 @@ class GenerateTeluguFormalLetterUseCase(
     suspend fun execute(input: LetterInput): VernAiResult<StructuredLetter> = withContext(dispatchers.default) {
         val prompt = TeluguLetterPromptTemplate.buildPrompt(input)
 
-        val llmResult = inferenceLock.withLlmLock {
-            llmEngine.generateCompleteText(
-                prompt = prompt,
-                params = GenerationParameters(temperature = 0.2f)
-            )
-        }
+        val llmResult = kotlinx.coroutines.withTimeoutOrNull(3500L) {
+            runCatching {
+                inferenceLock.withLlmLock {
+                    llmEngine.generateCompleteText(
+                        prompt = prompt,
+                        params = GenerationParameters(temperature = 0.2f)
+                    )
+                }
+            }.getOrNull()
+        } ?: VernAiResult.Error(IllegalStateException("Local LLM inference timed out; using deterministic letter engine."))
 
         val structuredLetter = when (llmResult) {
             is VernAiResult.Success -> {

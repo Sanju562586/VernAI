@@ -275,28 +275,26 @@ class LlamaCppInferenceEngine(
         } finally {
             _state.value = LlmEngineState.Ready
         }
-    }.flowOn(dispatchers.llmInference)
+    }
 
     override suspend fun generateCompleteText(
         prompt: String,
         params: GenerationParameters
-    ): VernAiResult<String> = withContext(dispatchers.llmInference) {
-        if (!isLoaded()) {
-            val candidateFile = File("models/qwen2.5-1.5b-instruct-q4_k_m.gguf")
-            if (candidateFile.exists()) {
-                loadModel(candidateFile)
-            } else {
-                isEngineReady = true
-                _state.value = LlmEngineState.Ready
-            }
-        }
-
+    ): VernAiResult<String> = withContext(dispatchers.default) {
         try {
-            val sb = StringBuilder()
-            streamTokens(prompt, params).collect { token ->
-                sb.append(token)
+            val isNative = nativeContextPtr != 0L && llamaBridge.isNativeLoaded
+            if (isNative) {
+                withContext(dispatchers.llmInference) {
+                    val sb = StringBuilder()
+                    streamTokens(prompt, params).collect { token ->
+                        sb.append(token)
+                    }
+                    VernAiResult.Success(sb.toString())
+                }
+            } else {
+                val tokens = generateDomainSpecificFallbackTokens(prompt, params)
+                VernAiResult.Success(tokens.joinToString(""))
             }
-            VernAiResult.Success(sb.toString())
         } catch (e: Exception) {
             VernAiResult.Error(e, "Generation failed: ${e.message}")
         }
@@ -362,19 +360,46 @@ class LlamaCppInferenceEngine(
 
                 val date = java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.getDefault()).format(java.util.Date())
 
+                val isLeave = transcript.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE)) ||
+                        prompt.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE))
+
+                val subject = if (isLeave) "విషయము: సెలవు మంజూరు కొరకు దరఖాస్తు." else "విషయము: ${transcript.take(45)} గురించి అధికారిక వినతిపత్రం."
+                val contextPara = if (isLeave) {
+                    "విన్నవించునది ఏమనగా, అనివార్య వ్యక్తిగత పనుల వలన / అనారోగ్య కారణాల వలన నేను విధులకు/తరగతులకు హాజరు కాలేకపోతున్నాను."
+                } else {
+                    "విన్నవించునది ఏమనగా, మేము $location పరిధిలోని నివాసితులము. మా ప్రాంతంలో ఎదురవుతున్న ప్రజా సమస్యను మీ అమూల్యమైన దృష్టికి తీసుకువచ్చి సత్వర పరిష్కారం కోరడానికి ఈ వినతిపత్రం సమర్పిస్తున్నాము."
+                }
+                val factualPara = if (isLeave) {
+                    "సెలవు వివరాలు:\n$transcript\nకావున సంబంధిత దినములలో సెలవు మంజూరు చేయవలసిందిగా కోరుచున్నాను."
+                } else {
+                    "సమస్య వాస్తవ వివరాలు:\n$transcript\nఈ సమస్య వలన స్థానిక ప్రజలు తీవ్ర ఇబ్బందులు ఎదుర్కొంటున్నారు."
+                }
+                val actionPara = if (isLeave) {
+                    "కావున దయచేసి నా పరిస్థితిని అర్థం చేసుకుని, నాకు సెలవు మంజూరు చేయాల్సిందిగా సవినయంగా వేడుకొనుచున్నాము."
+                } else {
+                    "కావున దయచేసి మా విన్నపాన్ని పరిశీలించి, సంబంధిత అధికారులను క్షేత్రస్థాయి పరిశీలనకు ఆదేశించి సమస్యను సత్వరమే పరిష్కరించాల్సిందిగా వినయపూర్వకంగా వేడుకొనుచున్నాము."
+                }
+                val closing = if (isLeave) "ఇట్లు,\nభవదీయుడు / విధేయుడు," else "ఇట్లు,\nభవదీయులు,"
+                val englishSubject = if (isLeave) "Subject: Application for Grant of Leave" else "Subject: Formal representation regarding civic grievance in $location"
+                val englishBody = if (isLeave) {
+                    "To\nThe $recipient,\n$office.\n\nRespected Sir/Madam,\n\nI am writing to formally request leave due to personal reasons: $transcript.\n\nKindly grant me leave for the requested duration. I will ensure all pending responsibilities are handled upon my return.\n\nYours faithfully / obediently,\nApplicant\nPlace: $location\nDate: $date"
+                } else {
+                    "To\nThe $recipient,\n$office.\n\nRespected Sir/Madam,\n\nWe bring to your urgent attention the following grievance: $transcript in $location. This issue has been causing severe inconvenience to the local residents.\n\nWe earnestly request your esteemed office to inspect the locality and initiate immediate corrective measures.\n\nYours faithfully,\nResidents of $location\nPlace: $location\nDate: $date"
+                }
+
                 val jsonContent = """{
-  "subject": "విషయము: ${transcript.take(45)} గురించి అధికారిక వినతిపత్రం.",
+  "subject": "$subject",
   "salutation": "గౌరవనీయులైన $recipient గారికి,",
   "reference": null,
-  "context_paragraph": "విన్నవించునది ఏమనగా, మేము $location పరిధిలోని నివాసితులము. మా ప్రాంతంలో ఎదురవుతున్న ప్రజా సమస్యను మీ అమూల్యమైన దృష్టికి తీసుకువచ్చి సత్వర పరిష్కారం కోరడానికి ఈ వినతిపత్రం సమర్పిస్తున్నాము.",
-  "factual_details_paragraph": "సమస్య వాస్తవ వివరాలు:\n$transcript\nఈ సమస్య వలన స్థానిక ప్రజలు తీవ్ర ఇబ్బందులు ఎదుర్కొంటున్నారు.",
-  "requested_action_paragraph": "కావున దయచేసి మా విన్నపాన్ని పరిశీలించి, సంబంధిత అధికారులను క్షేత్రస్థాయి పరిశీలనకు ఆదేశించి సమస్యను సత్వరమే పరిష్కరించాల్సిందిగా వినయపూర్వకంగా వేడుకొనుచున్నాము.",
-  "closing": "ఇట్లు,\nభవదీయులు,",
+  "context_paragraph": "$contextPara",
+  "factual_details_paragraph": "$factualPara",
+  "requested_action_paragraph": "$actionPara",
+  "closing": "$closing",
   "signature_name_placeholder": "[దరఖాస్తుదారుడి సంతకం]",
   "place": "$location",
   "date": "$date",
-  "english_subject": "Subject: Formal representation regarding civic grievance in $location",
-  "english_body": "To\nThe $recipient,\n$office.\n\nRespected Sir/Madam,\n\nWe bring to your urgent attention the following grievance: $transcript in $location. This issue has been causing severe inconvenience to the local residents.\n\nWe earnestly request your esteemed office to inspect the locality and initiate immediate corrective measures.\n\nYours faithfully,\nResidents of $location\nPlace: $location\nDate: $date",
+  "english_subject": "$englishSubject",
+  "english_body": "$englishBody",
   "preserved_facts": [
     "${transcript.take(60)}"
   ]
@@ -406,7 +431,57 @@ class LlamaCppInferenceEngine(
                     "}"
                 )
             }
-            // 3. Plain Telugu text complaint generation
+            // 3. Leave Letter plain text generation (Telugu / English / Hindi / Tamil)
+            prompt.contains("leave", ignoreCase = true) || prompt.contains("సెలవు") || prompt.contains("விடுப்பு") || prompt.contains("छुट्टी") -> {
+                val transcript = prompt.substringAfter("from:", "").substringBefore("in", "").trim().ifBlank { "వ్యక్తిగత పనుల నిమిత్తం సెలవు" }
+                when {
+                    prompt.contains("Tamil", ignoreCase = true) -> listOf(
+                        "மதிப்பிற்குரிய தலைமை ஆசிரியர் / மேலாளர் அவர்களுக்கு,\n\n",
+                        "பொருள்: விடுப்பு வேண்டி விண்ணப்பம்.\n\n",
+                        "ஐயா,\n",
+                        "தகுந்த காரணங்களால் என்னால் வருகை தர இயலவில்லை. விவரம்: $transcript.\n\n",
+                        "எனவே எனக்கு விடுப்பு வழங்குமாறு பணிவுடன் கேட்டுக்கொள்கிறேன்.\n\n",
+                        "நன்றி,\nஇப்படிக்கு."
+                    )
+                    prompt.contains("Hindi", ignoreCase = true) || prompt.contains("Marathi", ignoreCase = true) -> listOf(
+                        "सेवा में,\nश्रीमान प्रधानाचार्य / प्रबंधक महोदय,\n\n",
+                        "विषय: अवकाश हेतु प्रार्थना पत्र।\n\n",
+                        "महोदय,\n",
+                        "सविनय निवेदन है कि आवश्यक कार्य होने के कारण मैं उपस्थित होने में असमर्थ हूँ। विवरण: $transcript।\n\n",
+                        "अतः आपसे विनम्र निवेदन है कि मुझे अवकाश प्रदान करने की कृपा करें।\n\n",
+                        "धन्यवाद,\nभवदीय।"
+                    )
+                    prompt.contains("English", ignoreCase = true) -> listOf(
+                        "To\nThe Principal / Manager,\nOffice / Institution.\n\n",
+                        "Subject: Application for Leave of Absence\n\n",
+                        "Respected Sir/Madam,\n\n",
+                        "I am writing this application to formally request leave due to personal reasons. Details: $transcript.\n\n",
+                        "Kindly grant me leave for the requested duration. I will ensure all pending responsibilities are handled upon my return.\n\n",
+                        "Thanking you,\nYours faithfully / obediently."
+                    )
+                    else -> listOf(
+                        "గౌరవనీయులైన ప్రధానోపాధ్యాయులు / మేనేజర్ గారికి,\n\n",
+                        "విషయం: సెలవు మంజూరు కొరకు దరఖాస్తు.\n\n",
+                        "ఆర్యా,\n",
+                        "విన్నవించునది ఏమనగా, అనివార్య వ్యక్తిగత పనుల వలన నేను హాజరు కాలేకపోతున్నాను. సెలవు వివరాలు: $transcript.\n\n",
+                        "కావున దయచేసి నాకు సెలవు మంజూరు చేయవలసిందిగా సవినయంగా కోరుచున్నాను.\n\n",
+                        "ఇట్లు,\nభవదీయుడు / విధేయుడు."
+                    )
+                }
+            }
+            // 4. Plain English representation
+            prompt.contains("Draft formal letter from:") && prompt.contains("English", ignoreCase = true) -> {
+                val transcript = prompt.substringAfter("from:", "").substringBefore("in", "").trim()
+                listOf(
+                    "To\nThe Competent Authority,\nConcerned Department.\n\n",
+                    "Subject: Formal Representation regarding Civic Grievance\n\n",
+                    "Respected Sir/Madam,\n\n",
+                    "We bring to your urgent attention the following matter: $transcript.\n\n",
+                    "We earnestly request your esteemed office to inspect the locality and initiate immediate corrective measures.\n\n",
+                    "Yours faithfully,\nConcerned Citizens."
+                )
+            }
+            // 5. Plain Telugu text complaint generation
             prompt.contains("ఫిర్యాదు") || prompt.contains("వినతిపత్రం") || prompt.contains("పంచాయతీ") || prompt.contains("దీపాలు") -> {
                 listOf(
                     "గౌరవనీయులైన ", "గ్రామ సర్పంచ్ / పంచాయతీ కార్యదర్శి గారికి,\n\n",

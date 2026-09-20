@@ -21,4 +21,7 @@ sealed interface VernAiNavDestination : NavKey {
 
     @Serializable
     data object DocumentExplainer : VernAiNavDestination
+
+    @Serializable
+    data object LanguageSelection : VernAiNavDestination
 }

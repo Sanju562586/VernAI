@@ -227,10 +227,10 @@ class SalesViewModel(
                     processTranscript(textToProcess, uiState.value.selectedLanguage)
                 } else {
                     val emptyMsg = when (uiState.value.selectedLanguage) {
-                        Language.TAMIL -> "குரல் பதிவு கண்டறியப்படவில்லை. தயவுசெய்து மீண்டும் பேசவும் (No speech detected)."
-                        Language.HINDI, Language.MARATHI -> "आवाज दर्ज नहीं हुई। कृपया दोबारा बोलें (No speech detected)."
-                        Language.ENGLISH -> "No speech detected. Please try speaking again."
-                        else -> "ఆడియో రికార్డింగ్ వినబడలేదు. దయచేసి మళ్ళీ మాట్లాడండి (No speech detected)."
+                        Language.TAMIL -> "குரல் கேட்கவில்லை. தயவுசெய்து மைக்கில் பேசவும் அல்லது கீழே உள்ள உதாரணங்களை அழுத்தவும் (No speech heard)."
+                        Language.HINDI, Language.MARATHI -> "आवाज सुनाई नहीं दी। कृपया माइक में बोलें या नीचे दिए गए उदाहरण पर टैप करें (No speech heard)."
+                        Language.ENGLISH -> "No speech heard. Please speak into the microphone or tap the examples below."
+                        else -> "ధ్వని వినబడలేదు. దయచేసి మైక్రోఫోన్ వద్ద మాట్లాడండి లేదా క్రింద ఉన్న ఉదాహరణలను తాకండి (No speech heard)."
                     }
                     setState { copy(isProcessing = false, errorMessage = emptyMsg) }
                 }

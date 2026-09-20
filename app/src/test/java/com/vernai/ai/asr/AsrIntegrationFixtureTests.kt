@@ -152,4 +152,33 @@ class AsrIntegrationFixtureTests {
         assertTrue("WER should reflect word mismatch", metricsVariant.wer > 0.0f)
         assertTrue("CER should reflect character variations", metricsVariant.cer > 0.0f)
     }
+
+    @Test
+    fun acousticVoiceCommand_generatesLanguageSpecificUtterances() {
+        // 1. Short utterance (sales dictation)
+        val teShort = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.TELUGU, speechEnergyFrames = 15)
+        assertTrue("Telugu short voice command should contain tomato sales", teShort.contains("టమాటా") && teShort.contains("200 రూపాయలు"))
+
+        val taShort = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.TAMIL, speechEnergyFrames = 15)
+        assertTrue("Tamil short voice command should contain tomato sales", taShort.contains("தக்காளி") && taShort.contains("ரூபாய்"))
+
+        val hiShort = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.HINDI, speechEnergyFrames = 15)
+        assertTrue("Hindi short voice command should contain tomato sales", hiShort.contains("टमाटर") && hiShort.contains("रुपये"))
+
+        val enShort = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.ENGLISH, speechEnergyFrames = 15)
+        assertTrue("English short voice command should contain tomato sales", enShort.contains("tomatoes") && enShort.contains("200 rupees"))
+
+        // 2. Long utterance (grievance petition)
+        val teLong = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.TELUGU, speechEnergyFrames = 40)
+        assertTrue("Telugu long voice command should contain grievance petition", teLong.contains("పంచాయతీ") && teLong.contains("వినతిపత్రం"))
+
+        val taLong = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.TAMIL, speechEnergyFrames = 40)
+        assertTrue("Tamil long voice command should contain grievance petition", taLong.contains("ஊராட்சி") && taLong.contains("புகார்"))
+
+        val hiLong = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.HINDI, speechEnergyFrames = 40)
+        assertTrue("Hindi long voice command should contain grievance petition", hiLong.contains("पंचायत") && hiLong.contains("शिकायत"))
+
+        val enLong = OnDeviceAsrEngine.generateAcousticVoiceCommand(com.vernai.core.model.Language.ENGLISH, speechEnergyFrames = 40)
+        assertTrue("English long voice command should contain grievance petition", enLong.contains("panchayat") && enLong.contains("complaint"))
+    }
 }

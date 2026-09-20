@@ -158,8 +158,11 @@ class TeluguLetterParser {
             signature = signaturePlaceholders
         )
 
+        val isLeave = input.teluguVoiceTranscript.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE)) ||
+                input.userProvidedFacts.any { it.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE)) }
+
         val englishTranslation = rawLetter.english_body?.trim()?.ifBlank { null }
-            ?: buildDefaultEnglishTranslation(input, subject, bodyParagraphs)
+            ?: buildDefaultEnglishTranslation(input, subject, bodyParagraphs, isLeave)
 
         return StructuredLetter(
             letterType = input.letterType,
@@ -198,20 +201,37 @@ class TeluguLetterParser {
         val date = input.date ?: "[తేదీ: DD-MM-YYYY]"
         val applicantName = input.applicantName ?: "[దరఖాస్తుదారుడి పేరు]"
 
-        val subject = "${input.letterType.defaultSubjectPrefix}${input.teluguVoiceTranscript.take(40)} గురించి."
+        val isLeave = input.teluguVoiceTranscript.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE)) ||
+                input.userProvidedFacts.any { it.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE)) }
+
+        val subject = if (isLeave) {
+            "విషయము: సెలవు మంజూరు చేయవలసిందిగా దరఖాస్తు."
+        } else {
+            "${input.letterType.defaultSubjectPrefix}${input.teluguVoiceTranscript.take(40)} గురించి."
+        }
+
         val salutation = "గౌరవనీయులైన ${input.recipient.designation} గారికి,"
 
-        val contextPara = "విన్నవించునది ఏమనగా, నేను/మేము పై పేర్కొన్న ప్రాంతానికి చెందిన నివాసితులము. ప్రస్తుత సమస్యపై మీ దృష్టికి తీసుకురావడానికి ఈ ${input.letterType.teluguTitle} సమర్పిస్తున్నాము."
+        val contextPara = if (isLeave) {
+            "విన్నవించునది ఏమనగా, అనివార్య వ్యక్తిగత పనుల వలన / అనారోగ్య కారణాల వలన నేను విధులకు/తరగతులకు హాజరు కాలేకపోతున్నాను. కావున నాకు సెలవు మంజూరు చేయవలసిందిగా కోరుచున్నాను."
+        } else {
+            "విన్నవించునది ఏమనగా, నేను/మేము పై పేర్కొన్న ప్రాంతానికి చెందిన నివాసితులము. ప్రస్తుత సమస్యపై మీ దృష్టికి తీసుకురావడానికి ఈ ${input.letterType.teluguTitle} సమర్పిస్తున్నాము."
+        }
 
         val factsDetails = if (input.userProvidedFacts.isNotEmpty()) {
             "ఈ క్రింది వాస్తవాలను మీ పరిశీలనకు ఉంచుతున్నాము:\n" +
                     input.userProvidedFacts.mapIndexed { index, fact -> "${index + 1}. $fact" }.joinToString("\n")
         } else {
-            "సమస్య వివరాలు:\n${input.teluguVoiceTranscript}"
+            if (isLeave) "సెలవు వివరాలు:\n${input.teluguVoiceTranscript}" else "సమస్య వివరాలు:\n${input.teluguVoiceTranscript}"
         }
 
-        val actionPara = "కావున దయచేసి పై పేర్కొన్న విషయాలను పరిశీలించి, వెంటనే తగిన విచారణ జరిపి తగు పరిష్కారం కల్పించవలసిందిగా కోరుచున్నాము."
-        val closing = "ఇట్లు,\nభవదీయుడు/భవదీయురాలు,"
+        val actionPara = if (isLeave) {
+            "కావున దయచేసి నా పరిస్థితిని పరిశీలించి, నాకు సెలవు మంజూరు చేయవలసిందిగా సవినయంగా కోరుచున్నాను."
+        } else {
+            "కావున దయచేసి పై పేర్కొన్న విషయాలను పరిశీలించి, వెంటనే తగిన విచారణ జరిపి తగు పరిష్కారం కల్పించవలసిందిగా కోరుచున్నాము."
+        }
+
+        val closing = if (isLeave) "ఇట్లు,\nభవదీయుడు/భవదీయురాలు (విధేయుడు)," else "ఇట్లు,\nభవదీయుడు/భవదీయురాలు,"
 
         val signaturePlaceholders = SignaturePlaceholders(
             applicantName = applicantName,
@@ -233,7 +253,7 @@ class TeluguLetterParser {
             signature = signaturePlaceholders
         )
 
-        val englishTranslation = buildDefaultEnglishTranslation(input, subject, bodyParagraphs)
+        val englishTranslation = buildDefaultEnglishTranslation(input, subject, bodyParagraphs, isLeave)
 
         return StructuredLetter(
             letterType = input.letterType,
@@ -303,7 +323,8 @@ class TeluguLetterParser {
     private fun buildDefaultEnglishTranslation(
         input: LetterInput,
         subject: String,
-        bodyParagraphs: List<String>
+        bodyParagraphs: List<String>,
+        isLeave: Boolean = false
     ): String {
         return buildString {
             appendLine("To")
@@ -313,25 +334,50 @@ class TeluguLetterParser {
                 appendLine(input.recipient.officeAddress)
             }
             appendLine()
-            appendLine("Subject: Official ${input.letterType.englishTitle} regarding ${input.teluguVoiceTranscript.take(40)}")
-            appendLine()
-            appendLine("Respected Sir/Madam,")
-            appendLine()
-            appendLine("I am submitting this formal ${input.letterType.englishTitle.lowercase()} regarding the following matter:")
-            if (input.userProvidedFacts.isNotEmpty()) {
-                input.userProvidedFacts.forEachIndexed { i, fact ->
-                    appendLine("${i + 1}. $fact")
+            if (isLeave) {
+                appendLine("Subject: Application for Grant of Leave")
+                appendLine()
+                appendLine("Respected Sir/Madam,")
+                appendLine()
+                appendLine("I am writing this application to formally request leave due to personal / unavoidable reasons.")
+                appendLine()
+                appendLine("Leave details and reasons:")
+                if (input.userProvidedFacts.isNotEmpty()) {
+                    input.userProvidedFacts.forEachIndexed { i, fact ->
+                        appendLine("${i + 1}. $fact")
+                    }
+                } else {
+                    appendLine(input.teluguVoiceTranscript)
                 }
+                appendLine()
+                appendLine("I kindly request you to grant me leave for the specified period. I will ensure all pending responsibilities are promptly fulfilled upon my return.")
+                appendLine()
+                appendLine("Thanking you,")
+                appendLine("Yours faithfully / obediently,")
+                appendLine("${input.applicantName ?: "[Applicant Signature]"}")
+                appendLine("Place: ${input.location ?: "[Place]"}")
+                appendLine("Date: ${input.date ?: "[Date]"}")
             } else {
-                appendLine(input.teluguVoiceTranscript)
+                appendLine("Subject: Official ${input.letterType.englishTitle} regarding ${input.teluguVoiceTranscript.take(40)}")
+                appendLine()
+                appendLine("Respected Sir/Madam,")
+                appendLine()
+                appendLine("I am submitting this formal ${input.letterType.englishTitle.lowercase()} regarding the following matter:")
+                if (input.userProvidedFacts.isNotEmpty()) {
+                    input.userProvidedFacts.forEachIndexed { i, fact ->
+                        appendLine("${i + 1}. $fact")
+                    }
+                } else {
+                    appendLine(input.teluguVoiceTranscript)
+                }
+                appendLine()
+                appendLine("I request your esteemed office to kindly examine the matter and initiate necessary action at the earliest.")
+                appendLine()
+                appendLine("Yours faithfully,")
+                appendLine("${input.applicantName ?: "[Applicant Signature]"}")
+                appendLine("Place: ${input.location ?: "[Place]"}")
+                appendLine("Date: ${input.date ?: "[Date]"}")
             }
-            appendLine()
-            appendLine("I request your esteemed office to kindly examine the matter and initiate necessary action at the earliest.")
-            appendLine()
-            appendLine("Yours faithfully,")
-            appendLine("${input.applicantName ?: "[Applicant Signature]"}")
-            appendLine("Place: ${input.location ?: "[Place]"}")
-            appendLine("Date: ${input.date ?: "[Date]"}")
         }.trimEnd()
     }
 

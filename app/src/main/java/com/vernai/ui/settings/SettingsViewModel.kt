@@ -11,6 +11,8 @@ import com.vernai.ai.model.OfflineModelInspector
 import com.vernai.ui.common.MviViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.vernai.core.model.Language
+import com.vernai.core.preferences.UserPreferencesManager
 import java.io.File
 import java.util.Locale
 
@@ -19,15 +21,25 @@ class SettingsViewModel(
     private val benchmarkRunner: LlmBenchmarkRunner? = null
 ) : MviViewModel<SettingsUiState, SettingsUiIntent, SettingsUiSideEffect>(
     SettingsUiState(
-        models = OfflineModelInspector.getModelStatusItems(context)
+        models = OfflineModelInspector.getModelStatusItems(context),
+        selectedLanguage = if (context != null) UserPreferencesManager.getPreferredLanguage(context) else Language.TELUGU
     )
 ) {
 
     override fun handleIntent(intent: SettingsUiIntent) {
         when (intent) {
             is SettingsUiIntent.ChangeLanguage -> {
+                if (context != null) {
+                    UserPreferencesManager.setPreferredLanguage(context, intent.language)
+                }
                 setState { copy(selectedLanguage = intent.language) }
-                sendSideEffect(SettingsUiSideEffect.ShowToast("భాష మార్చబడింది (Language Updated to ${intent.language.nativeName})"))
+                val toastMessage = when (intent.language) {
+                    Language.TAMIL -> "மொழி மாற்றப்பட்டது (${intent.language.nativeName})"
+                    Language.HINDI, Language.MARATHI -> "भाषा बदली गई (${intent.language.nativeName})"
+                    Language.ENGLISH -> "Language changed to English"
+                    else -> "భాష మార్చబడింది (${intent.language.nativeName})"
+                }
+                sendSideEffect(SettingsUiSideEffect.ShowToast(toastMessage))
             }
             is SettingsUiIntent.UpdateThreadCount -> {
                 setState { copy(threadCount = intent.threads.coerceIn(1, 8)) }

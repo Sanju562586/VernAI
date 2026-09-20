@@ -68,6 +68,8 @@ class DocReaderViewModel(
             is DocReaderUiIntent.ProcessDocumentExplanation -> summarizeCurrentDocument()
             is DocReaderUiIntent.ExportExplanation -> exportExplanation(intent.cacheDir)
             is DocReaderUiIntent.ClearError -> setState { copy(extractionError = null) }
+            is DocReaderUiIntent.ToggleSpeech -> toggleSpeech()
+            is DocReaderUiIntent.SetSpeakingState -> setState { copy(isSpeaking = intent.isSpeaking) }
         }
     }
 
@@ -257,6 +259,40 @@ class DocReaderViewModel(
                 }
                 is VernAiResult.Loading -> Unit
             }
+        }
+    }
+
+    private fun toggleSpeech() {
+        if (uiState.value.isSpeaking) {
+            setState { copy(isSpeaking = false) }
+            sendSideEffect(DocReaderUiSideEffect.StopSpeaking)
+        } else {
+            val report = uiState.value.explanationReport
+            val textToSpeak = buildString {
+                if (report != null) {
+                    append(report.summaryInVernacular)
+                    if (report.legalDeadlines.isNotEmpty()) {
+                        append(". ముఖ్యమైన గడువులు: ")
+                        append(report.legalDeadlines.joinToString(", "))
+                    }
+                    if (report.keyActionPoints.isNotEmpty()) {
+                        append(". ముఖ్యమైన అంశాలు: ")
+                        append(report.keyActionPoints.joinToString(", "))
+                    }
+                } else if (uiState.value.selectedSnippetExplanation != null) {
+                    append(uiState.value.selectedSnippetExplanation)
+                } else if (uiState.value.extractedDocument != null) {
+                    append(uiState.value.extractedDocument?.rawText?.take(500))
+                }
+            }
+
+            if (textToSpeak.isBlank()) {
+                sendSideEffect(DocReaderUiSideEffect.ShowToast("చదవడానికి ఎటువంటి వివరణ అందుబాటులో లేదు (No explanation to read)"))
+                return
+            }
+
+            setState { copy(isSpeaking = true) }
+            sendSideEffect(DocReaderUiSideEffect.SpeakText(textToSpeak, uiState.value.activeLanguage))
         }
     }
 }

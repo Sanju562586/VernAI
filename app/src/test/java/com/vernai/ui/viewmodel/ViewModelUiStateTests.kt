@@ -288,4 +288,71 @@ class ViewModelUiStateTests {
         viewModel.handleIntent(DocReaderUiIntent.ToggleRawText)
         assertTrue("Raw text should be toggled true", viewModel.uiState.value.showRawText)
     }
+
+    @Test
+    fun letterEditorViewModel_speechAndPanchayatPrint() = runTest(testDispatcher) {
+        val viewModel = LetterEditorViewModel(
+            complaintRepository = FakeComplaintRepository(),
+            llmEngine = MockLlmInferenceEngine(),
+            exporter = LocalDocumentExporter(),
+            dispatchers = testDispatchers
+        )
+
+        // Populate sample facts
+        viewModel.handleIntent(LetterUiIntent.LoadSampleFacts)
+        advanceUntilIdle()
+
+        // Generate draft letter
+        viewModel.handleIntent(LetterUiIntent.GenerateLetter)
+        advanceUntilIdle()
+
+        assertTrue("Vernacular body should be populated", viewModel.uiState.value.vernacularBody.isNotBlank())
+
+        // Toggle speech
+        assertFalse("Initially not speaking", viewModel.uiState.value.isSpeaking)
+        viewModel.handleIntent(LetterUiIntent.ToggleSpeech)
+        assertTrue("Speaking state should be true after toggle", viewModel.uiState.value.isSpeaking)
+
+        viewModel.handleIntent(LetterUiIntent.ToggleSpeech)
+        assertFalse("Speaking state should be false after second toggle", viewModel.uiState.value.isSpeaking)
+
+        // Panchayat Print Intent
+        val cacheFolder = tempFolder.newFolder("print_test")
+        viewModel.handleIntent(LetterUiIntent.PrintLetter(cacheFolder))
+        advanceUntilIdle()
+
+        assertNotNull("Exported PDF file should be prepared for printing", viewModel.uiState.value.exportedFile)
+        assertTrue("PDF file should exist on disk", viewModel.uiState.value.exportedFile!!.exists())
+    }
+
+    @Test
+    fun docReaderViewModel_cameraScanAndSpeechToggle() = runTest(testDispatcher) {
+        val viewModel = DocReaderViewModel(
+            llmEngine = MockLlmInferenceEngine(),
+            dispatchers = testDispatchers
+        )
+
+        // Mock camera JPEG bytes: valid JPEG magic bytes (FF D8 FF) + non-zero payload
+        val fakeJpegBytes = ByteArray(256) { (it % 250 + 1).toByte() }.apply {
+            this[0] = 0xFF.toByte()
+            this[1] = 0xD8.toByte()
+            this[2] = 0xFF.toByte()
+        }
+
+        viewModel.handleIntent(DocReaderUiIntent.PickDocumentFile("camera_scan_101.jpg", "image/jpeg", fakeJpegBytes))
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertNotNull("Extracted document from camera image scan should be present", state.extractedDocument)
+        assertTrue("Document text should contain scanned OCR content", state.extractedDocument!!.rawText.isNotBlank())
+        assertTrue("Chunks should be generated for scanned image", state.chunks.isNotEmpty())
+
+        // Test speech toggle on document reader
+        assertFalse("Initially not speaking", viewModel.uiState.value.isSpeaking)
+        viewModel.handleIntent(DocReaderUiIntent.ToggleSpeech)
+        assertTrue("Speaking state should become true", viewModel.uiState.value.isSpeaking)
+
+        viewModel.handleIntent(DocReaderUiIntent.ToggleSpeech)
+        assertFalse("Speaking state should toggle back to false", viewModel.uiState.value.isSpeaking)
+    }
 }

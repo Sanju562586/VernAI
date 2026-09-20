@@ -27,6 +27,11 @@ import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Speed
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.clickable
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +52,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +62,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.vernai.ai.llm.benchmark.ExecutionBackend
 import com.vernai.core.model.Language
 import java.util.Locale
@@ -67,6 +76,7 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var showAdvancedHardware by remember { mutableStateOf(false) }
 
     LaunchedEffect(viewModel) {
         viewModel.sideEffect.collect { effect ->
@@ -89,7 +99,15 @@ fun SettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings & Hardware", fontWeight = FontWeight.Bold) },
+                title = {
+                    val screenTitle = when (state.selectedLanguage) {
+                        Language.TAMIL -> "அமைப்புகள் & தனியுரிமை (Settings)"
+                        Language.HINDI, Language.MARATHI -> "सेटिंग्स और गोपनीयता (Settings)"
+                        Language.ENGLISH -> "Settings & Privacy"
+                        else -> "అమరికలు & భద్రత (Settings)"
+                    }
+                    Text(screenTitle, fontWeight = FontWeight.Bold)
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -110,10 +128,17 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // 1. Language Preference
             item {
                 Spacer(modifier = Modifier.height(4.dp))
+                val langHeader = when (state.selectedLanguage) {
+                    Language.TAMIL -> "முதன்மை மொழி (Choose Language)"
+                    Language.HINDI, Language.MARATHI -> "प्राथमिक भाषा (Choose Language)"
+                    Language.ENGLISH -> "Choose App Language"
+                    else -> "భాష ఎంచుకోండి (Choose Language)"
+                }
                 Text(
-                    text = "Primary Language / ప్రాథమిక భాష",
+                    text = langHeader,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -122,7 +147,7 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Language.entries.forEach { lang ->
+                    listOf(Language.TELUGU, Language.TAMIL, Language.HINDI, Language.ENGLISH).forEach { lang ->
                         val isSelected = lang == state.selectedLanguage
                         FilterChip(
                             selected = isSelected,
@@ -139,21 +164,55 @@ fun SettingsScreen(
                 }
             }
 
+            // 2. 100% Offline & Privacy Assurance Card
             item {
-                MemoryBudgetCard(state = state)
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFDCFCE7).copy(alpha = 0.5f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(44.dp)
+                                .clip(CircleShape)
+                                .background(Color(0xFF16A34A).copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Security,
+                                contentDescription = null,
+                                tint = Color(0xFF166534),
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "100% ఆఫ్‌లైన్ & పూర్తి గోప్యత (Zero Cloud)",
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleSmall,
+                                color = Color(0xFF166534)
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "మీ డేటా, మాట్లాడిన మాటలు మరియు పత్రాలు మీ ఫోన్‌లోనే ఉంటాయి. ఇంటర్నెట్ అవసరం లేదు.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF15803D),
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                }
             }
 
-            item {
-                HardwareSettingsCard(state = state, viewModel = viewModel)
-            }
-
-            item {
-                SnapdragonBenchmarkCard(state = state, viewModel = viewModel)
-            }
-
+            // 3. On-Device AI Models
             item {
                 Text(
-                    text = "On-Device AI Models (Local Storage)",
+                    text = "స్థానిక AI ఇంజిన్లు (On-Device AI)",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
@@ -161,6 +220,64 @@ fun SettingsScreen(
 
             items(state.models) { model ->
                 ModelStatusCard(model = model)
+            }
+
+            // 4. Advanced Hardware & Benchmark (Collapsed by default)
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAdvancedHardware = !showAdvancedHardware },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Speed,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column {
+                                    Text(
+                                        text = "హార్డ్‌వేర్ & బెంచ్‌మార్క్ (Advanced)",
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = "Snapdragon మెమరీ బడ్జెట్ మరియు పనితీరు",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            IconButton(onClick = { showAdvancedHardware = !showAdvancedHardware }) {
+                                Icon(
+                                    imageVector = if (showAdvancedHardware) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = "Toggle"
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showAdvancedHardware) {
+                            Column(
+                                modifier = Modifier.padding(top = 14.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                MemoryBudgetCard(state = state)
+                                HardwareSettingsCard(state = state, viewModel = viewModel)
+                                SnapdragonBenchmarkCard(state = state, viewModel = viewModel)
+                            }
+                        }
+                    }
+                }
             }
 
             item {

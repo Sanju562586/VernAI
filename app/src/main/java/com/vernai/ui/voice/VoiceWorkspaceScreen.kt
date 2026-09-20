@@ -45,6 +45,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -154,12 +155,79 @@ fun VoiceWorkspaceScreen(
             // ── Stage label ────────────────────────────────────────────
             StageLabel(stage = state.stage, language = state.activeLanguage)
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Helpful suggestion chip / tip
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                val tipText = when (state.activeLanguage) {
+                    com.vernai.core.model.Language.TAMIL -> "💡 உதாரணமாக: 'பஞ்சாயத்துக்கு மனு எழுத வேண்டும்' அல்லது '5 கிலோ தக்காளி 200 ரூபாய்'"
+                    com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "💡 उदाहरण: 'सड़क मरम्मत के लिए पत्र लिखें' या '5 किलो टमाटर 200 रुपये'"
+                    com.vernai.core.model.Language.ENGLISH -> "💡 Example: 'Draft a complaint about street lights' or '5 kg tomato 200 rupees'"
+                    else -> "💡 ఉదాహరణ: 'పంచాయతీకి దరఖాస్తు రాయాలి' లేదా '5 కేజీల టమాటా 200 రూపాయలు'"
+                }
+                Text(
+                    text = tipText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Quick Voice Command Chips (for instant testing or fast dictation)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                val voiceCommandSamples = when (state.activeLanguage) {
+                    com.vernai.core.model.Language.TAMIL -> listOf(
+                        "எனக்கு இரண்டு நாட்கள் விடுப்பு வேண்டும்" to "📝 விடுப்பு கடிதம்",
+                        "இன்று 5 கிலோ தக்காளி 200 ரூபாய் விற்றேன்" to "🍅 தக்காளி விற்பனை",
+                        "ஊராட்சி அலுவலருக்கு கிராம சாலை பழுது மனு எழுதவும்" to "📜 சாலை புகார் மனு",
+                        "குடிநீர் தட்டுப்பாடு குறித்து புகார் மனு" to "💧 குடிநீர் மனு"
+                    )
+                    com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> listOf(
+                        "मुझे दो दिन की छुट्टी चाहिए, आवेदन पत्र लिखें" to "📝 अवकाश पत्र",
+                        "आज 5 किलो टमाटर 200 रुपये में बेचा" to "🍅 टमाटर बिक्री",
+                        "सड़क मरम्मत के लिए पंचायत अधिकारी को शिकायत पत्र लिखें" to "📜 सड़क शिकायत",
+                        "पीने के पानी की समस्या के लिए शिकायत पत्र" to "💧 पेयजल शिकायत"
+                    )
+                    com.vernai.core.model.Language.ENGLISH -> listOf(
+                        "Write a leave letter for two days due to fever" to "📝 Leave Letter",
+                        "Today sold 5 kg tomatoes for 200 rupees" to "🍅 Sales Record",
+                        "Draft complaint letter to panchayat officer for road repair" to "📜 Road Repair",
+                        "Formal petition regarding drinking water shortage" to "💧 Water Petition"
+                    )
+                    else -> listOf(
+                        "నాకు రెండు రోజులు సెలవు కావాలి లేఖ రాయండి" to "📝 సెలవు లేఖ",
+                        "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు అమ్మిన" to "🍅 టమాటా అమ్మకం",
+                        "మా వీధిలో రోడ్ల మరమ్మత్తు కోసం పంచాయతీ అధికారికి లేఖ రాయాలి" to "📜 రోడ్ల ఫిర్యాదు",
+                        "తాగునీటి సమస్యపై అధికారికి దరఖాస్తు" to "💧 తాగునీటి సమస్య"
+                    )
+                }
+                voiceCommandSamples.forEach { (cmdText, cmdLabel) ->
+                    SuggestionChip(
+                        onClick = { viewModel.handleIntent(VoiceUiIntent.SimulateSpeech(cmdText)) },
+                        label = { Text(cmdLabel, fontSize = 12.sp) }
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(20.dp))
 
             // ── Microphone button ──────────────────────────────────────
             MicButton(
                 isRecording = state.isRecording,
                 durationSec = state.recordingDurationSec,
+                language = state.activeLanguage,
                 onToggle = {
                     if (!state.isRecording && !permissionState.hasPermission) {
                         permissionState.requestPermission()
@@ -265,6 +333,7 @@ private fun StageLabel(stage: ProcessingStage, language: com.vernai.core.model.L
 private fun MicButton(
     isRecording: Boolean,
     durationSec: Int,
+    language: com.vernai.core.model.Language,
     onToggle: () -> Unit
 ) {
     val transition = rememberInfiniteTransition(label = "pulse")
@@ -304,7 +373,7 @@ private fun MicButton(
             ) {
                 Icon(
                     imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
-                    contentDescription = if (isRecording) "ఆపు" else "మాట్లాడు",
+                    contentDescription = if (isRecording) "Stop" else "Speak",
                     tint = Color.White,
                     modifier = Modifier.size(36.dp)
                 )
@@ -313,7 +382,7 @@ private fun MicButton(
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Timer — only shown during recording
+        // Timer and label
         if (isRecording) {
             val m = durationSec / 60
             val s = durationSec % 60
@@ -323,10 +392,30 @@ private fun MicButton(
                 fontSize = 18.sp,
                 color = StatusRed
             )
-        } else {
+            Spacer(modifier = Modifier.height(2.dp))
+            val stopHint = when (language) {
+                com.vernai.core.model.Language.TAMIL -> "ஆப் செய்ய மீண்டும் தட்டவும்"
+                com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "रोकने के लिए दोबारा टैप करें"
+                com.vernai.core.model.Language.ENGLISH -> "Tap again to finish"
+                else -> "ఆపడానికి మళ్లీ నొక్కండి"
+            }
             Text(
-                text = "నొక్కి మాట్లాడండి",
+                text = stopHint,
                 style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                color = StatusRed
+            )
+        } else {
+            val startHint = when (language) {
+                com.vernai.core.model.Language.TAMIL -> "பேச தட்டவும்"
+                com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "बोलने के लिए टैप करें"
+                com.vernai.core.model.Language.ENGLISH -> "Tap to speak"
+                else -> "నొక్కి మాట్లాడండి"
+            }
+            Text(
+                text = startHint,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -404,12 +493,24 @@ private fun ResultSection(
         else -> "AI గుర్తించిన విషయం"
     }
 
+    val isLeave = state.liveTranscript.contains("leave", ignoreCase = true) ||
+                  state.liveTranscript.contains("సెలవు") ||
+                  state.liveTranscript.contains("விடுப்பு") ||
+                  state.liveTranscript.contains("छुट्टी")
+
     val proceedText = if (state.detectedIntent == DetectedIntentType.SALES_RECORD) {
         when (state.activeLanguage) {
             com.vernai.core.model.Language.TAMIL -> "விற்பனை பதிவேட்டை திறக்கவும்"
             com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "बिक्री खाता खोलें"
             com.vernai.core.model.Language.ENGLISH -> "Open Sales Ledger"
             else -> "అమ్మకాల లాగ్ తెరవండి"
+        }
+    } else if (isLeave) {
+        when (state.activeLanguage) {
+            com.vernai.core.model.Language.TAMIL -> "விடுப்பு கடிதத்தை திறக்கவும்"
+            com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "अवकाश पत्र खोलें"
+            com.vernai.core.model.Language.ENGLISH -> "Open Leave Letter"
+            else -> "సెలవు లేఖ తెరవండి"
         }
     } else {
         when (state.activeLanguage) {

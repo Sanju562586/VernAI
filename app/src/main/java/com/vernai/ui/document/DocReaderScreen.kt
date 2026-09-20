@@ -63,6 +63,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -75,6 +78,12 @@ import com.vernai.document.processing.DocumentChunk
 import com.vernai.document.processing.DocumentQualityReport
 import com.vernai.document.processing.TestDocumentType
 
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.runtime.DisposableEffect
+import com.vernai.ai.tts.OnDeviceTtsManager
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DocReaderScreen(
@@ -84,6 +93,27 @@ fun DocReaderScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    var showAdvancedSections by remember { mutableStateOf(false) }
+
+    val ttsManager = remember { OnDeviceTtsManager(context) }
+    DisposableEffect(ttsManager) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
+
+    // Camera scanner for paper documents & forms
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap ->
+        if (bitmap != null) {
+            val stream = java.io.ByteArrayOutputStream()
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 90, stream)
+            val bytes = stream.toByteArray()
+            val fileName = "Paper_Scan_${System.currentTimeMillis()}.jpg"
+            viewModel.handleIntent(DocReaderUiIntent.PickDocumentFile(fileName, "image/jpeg", bytes))
+        }
+    }
 
     // Local file picker for PDF and image documents
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -111,6 +141,16 @@ fun DocReaderScreen(
             when (effect) {
                 is DocReaderUiSideEffect.ShowToast -> Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
                 is DocReaderUiSideEffect.OpenExportedFile -> Toast.makeText(context, "ఎగుమతి చేయబడింది: ${effect.file.name}", Toast.LENGTH_LONG).show()
+                is DocReaderUiSideEffect.SpeakText -> {
+                    val started = ttsManager.speak(effect.text, effect.language)
+                    if (!started) {
+                        viewModel.handleIntent(DocReaderUiIntent.SetSpeakingState(false))
+                        Toast.makeText(context, "వాయిస్ చదవడం ప్రారంభించలేకపోయాము. డివైస్ TTS సెట్టింగ్స్ చూడండి", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is DocReaderUiSideEffect.StopSpeaking -> {
+                    ttsManager.stop()
+                }
             }
         }
     }
@@ -120,13 +160,44 @@ fun DocReaderScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("ఆఫ్‌లైన్ పత్ర వివరణ (Document Reader)", fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text("Local PDF & OCR Zero-Hallucination Engine", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val screenTitle = when (state.activeLanguage) {
+                            com.vernai.core.model.Language.TAMIL -> "ஆவண விளக்கம் (Document Reader)"
+                            com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "दस्तावेज़ विवरण (Document Reader)"
+                            com.vernai.core.model.Language.ENGLISH -> "Document Reader & Explainer"
+                            else -> "పత్ర వివరణ (Document Reader)"
+                        }
+                        val screenSubtitle = when (state.activeLanguage) {
+                            com.vernai.core.model.Language.TAMIL -> "எளிய விளக்கம் • 100% ஆஃப்லைன்"
+                            com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "सरल विवरण • 100% ऑफ़लाइन"
+                            com.vernai.core.model.Language.ENGLISH -> "Clear explanations • 100% Offline"
+                            else -> "సులభమైన వివరణ • 100% ఆఫ్‌లైన్"
+                        }
+                        Text(screenTitle, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                        Text(screenSubtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.handleIntent(DocReaderUiIntent.ToggleSpeech) }
+                    ) {
+                        if (state.isSpeaking) {
+                            Icon(
+                                Icons.Default.VolumeOff,
+                                contentDescription = "వాయిస్ ఆపు (Stop)",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = "వివరణ చదువు (Read Aloud)",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -185,18 +256,28 @@ fun DocReaderScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("స్థానిక పత్రం ఎంచుకోండి", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("PDF లేదా స్కాన్ చేసిన ఫోటో (JPEG/PNG)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("పత్రం స్కాన్ లేదా అప్‌లోడ్", fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                        Text("పేపర్ ఫోటో లేదా PDF / ఇమేజ్", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Button(
-                        onClick = {
-                            filePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
-                        },
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("ఎంచుకోండి (Pick)")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(
+                            onClick = { cameraLauncher.launch(null) },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.CameraAlt, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("స్కాన్")
+                        }
+                        Button(
+                            onClick = {
+                                filePickerLauncher.launch(arrayOf("application/pdf", "image/*"))
+                            },
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("ఫైల్")
+                        }
                     }
                 }
             }
@@ -311,31 +392,12 @@ fun DocReaderScreen(
                 }
             }
 
-            // Interactive Chunk / Section Viewer (Context Limits)
-            if (state.chunks.isNotEmpty()) {
-                DocumentChunksViewerCard(
-                    state = state,
-                    onSelectChunk = { viewModel.handleIntent(DocReaderUiIntent.SelectChunk(it)) },
-                    onExplainChunk = { viewModel.handleIntent(DocReaderUiIntent.ExplainSelectedChunk(it)) }
-                )
-            }
-
-            // Selected Text Telugu Explainer Card
-            if (state.isExplainingSnippet || state.selectedSnippetExplanation != null) {
-                SelectedSnippetExplanationCard(
-                    isLoading = state.isExplainingSnippet,
-                    explanation = state.selectedSnippetExplanation,
-                    selectedChunk = state.selectedChunk,
-                    onDismiss = { viewModel.handleIntent(DocReaderUiIntent.ClearSelectedSnippet) }
-                )
-            }
-
             // Structured Form Filling Guidance Card (Scholarship & Civic Applications)
             state.formFillingGuidance?.let { guidance ->
                 FormFillingGuidanceCard(guidance = guidance)
             }
 
-            // Full Zero-Hallucination Explanation Section
+            // Full Vernacular Explanation Section
             if (state.isSummarizing) {
                 Box(
                     modifier = Modifier
@@ -347,11 +409,11 @@ fun DocReaderScreen(
                         CircularProgressIndicator()
                         Spacer(modifier = Modifier.height(10.dp))
                         val loadingText = when (state.activeLanguage) {
-                            com.vernai.core.model.Language.TAMIL -> "உள்ளூர் AI எளிய தமிழில் விளக்குகிறது (Zero-Hallucination)..."
-                            com.vernai.core.model.Language.HINDI -> "स्थानीय AI सरल हिंदी में विवरण तैयार कर रहा है (Zero-Hallucination)..."
-                            com.vernai.core.model.Language.MARATHI -> "स्थानिक AI सोप्या मराठीत स्पष्टीकरण देत आहे (Zero-Hallucination)..."
-                            com.vernai.core.model.Language.ENGLISH -> "Local AI is analyzing and explaining the document (Zero-Hallucination)..."
-                            else -> "స్థానిక AI పత్రాన్ని సులభమైన తెలుగులో వివరిస్తోంది (Zero-Hallucination)..."
+                            com.vernai.core.model.Language.TAMIL -> "உள்ளூர் AI எளிய தமிழில் விளக்குகிறது..."
+                            com.vernai.core.model.Language.HINDI -> "स्थानीय AI सरल हिंदी में विवरण तैयार कर रहा है..."
+                            com.vernai.core.model.Language.MARATHI -> "स्थानिक AI सोप्या मराठीत स्पष्टीकरण देत आहे..."
+                            com.vernai.core.model.Language.ENGLISH -> "Local AI is analyzing and explaining the document..."
+                            else -> "స్థానిక AI పత్రాన్ని సులభమైన తెలుగులో వివరిస్తోంది..."
                         }
                         Text(
                             text = loadingText,
@@ -364,12 +426,72 @@ fun DocReaderScreen(
                 ExplanationCard(report = state.explanationReport!!)
             }
 
-            // Collapsible Raw OCR Extracted Text
-            if (state.extractedDocument != null) {
-                RawOcrPreviewCard(
-                    state = state,
-                    onToggle = { viewModel.handleIntent(DocReaderUiIntent.ToggleRawText) }
-                )
+            // Optional Expandable Detail Section: Chunks & Raw Text
+            if (state.chunks.isNotEmpty() || state.extractedDocument != null) {
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { showAdvancedSections = !showAdvancedSections },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Info,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "వివరణాత్మక విభాగాలు & మూల వచనం (Detailed Sections)",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp
+                                )
+                            }
+                            IconButton(onClick = { showAdvancedSections = !showAdvancedSections }) {
+                                Icon(
+                                    imageVector = if (showAdvancedSections) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = "Toggle"
+                                )
+                            }
+                        }
+                        AnimatedVisibility(visible = showAdvancedSections) {
+                            Column(
+                                modifier = Modifier.padding(top = 10.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                if (state.chunks.isNotEmpty()) {
+                                    DocumentChunksViewerCard(
+                                        state = state,
+                                        onSelectChunk = { viewModel.handleIntent(DocReaderUiIntent.SelectChunk(it)) },
+                                        onExplainChunk = { viewModel.handleIntent(DocReaderUiIntent.ExplainSelectedChunk(it)) }
+                                    )
+                                }
+                                if (state.isExplainingSnippet || state.selectedSnippetExplanation != null) {
+                                    SelectedSnippetExplanationCard(
+                                        isLoading = state.isExplainingSnippet,
+                                        explanation = state.selectedSnippetExplanation,
+                                        selectedChunk = state.selectedChunk,
+                                        onDismiss = { viewModel.handleIntent(DocReaderUiIntent.ClearSelectedSnippet) }
+                                    )
+                                }
+                                if (state.extractedDocument != null) {
+                                    RawOcrPreviewCard(
+                                        state = state,
+                                        onToggle = { viewModel.handleIntent(DocReaderUiIntent.ToggleRawText) }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(20.dp))

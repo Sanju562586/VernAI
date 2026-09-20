@@ -30,58 +30,58 @@ fun getFeaturesForLanguage(language: Language): List<FeatureCardItem> {
         Language.TAMIL -> listOf(
             FeatureCardItem(
                 id = "voice",
-                title = "Voice Workspace & Live ASR",
+                title = "Voice Assistant",
                 nativeSubtitle = "குரல் உதவியாளர் (Voice Assistant)",
-                description = "உங்கள் மொழியில் பேசுங்கள்; உடனடி ஆஃப்லைன் எழுத்து வடிவம்.",
+                description = "உங்கள் குரலில் பேசுங்கள்; வேலை உடனடியாக முடியும்.",
                 destination = VernAiNavDestination.VoiceWorkspace
             ),
             FeatureCardItem(
                 id = "sales",
-                title = "Structured Sales Ledger",
+                title = "Daily Sales Ledger",
                 nativeSubtitle = "விற்பனை பதிவேடு (Sales Ledger)",
-                description = "தினசரி விற்பனையை தமிழில் பேசுங்கள்; எக்செல்/அட்டவணையாக மாற்றவும்.",
+                description = "தினசரி விற்பனையை பேசுங்கள்; கணக்குகள் தானாகவே தயாராகும்.",
                 destination = VernAiNavDestination.SalesLedger()
             ),
             FeatureCardItem(
                 id = "complaint",
-                title = "Formal Complaint Drafting",
-                nativeSubtitle = "முறையான புகார் மனு (Complaint Letter)",
-                description = "மாவட்ட ஆட்சியர் அல்லது அதிகாரிகளுக்கு முறையான மனு தயாரிக்கவும்.",
+                title = "Official Letter",
+                nativeSubtitle = "அதிகாரப்பூர்வ மனு (Official Letter)",
+                description = "மாவட்ட ஆட்சியர் அல்லது அதிகாரிகளுக்கு விண்ணப்பம் அல்லது புகார் கடிதம்.",
                 destination = VernAiNavDestination.ComplaintDrafting()
             ),
             FeatureCardItem(
                 id = "doc",
-                title = "Local Document Explainer",
+                title = "Document Reader",
                 nativeSubtitle = "ஆவண விளக்கம் (Document Reader)",
-                description = "படிவங்கள் மற்றும் கடினமான அரசு ஆவணங்களை எளிய தமிழில் புரிந்து கொள்ளவும்.",
+                description = "கடினமான ஆங்கிலப் படிவங்கள் மற்றும் அரசு ஆவணங்களை எளிய தமிழில் புரிந்து கொள்ளவும்.",
                 destination = VernAiNavDestination.DocumentExplainer
             )
         )
         Language.HINDI, Language.MARATHI -> listOf(
             FeatureCardItem(
                 id = "voice",
-                title = "Voice Workspace & Live ASR",
+                title = "Voice Assistant",
                 nativeSubtitle = "वॉयस असिस्टेंट (Voice Assistant)",
-                description = "अपनी भाषा में बोलें; स्वचालित रूप से टेक्स्ट में बदलें।",
+                description = "अपनी भाषा में बोलें; तुरंत काम पूरा होगा।",
                 destination = VernAiNavDestination.VoiceWorkspace
             ),
             FeatureCardItem(
                 id = "sales",
-                title = "Structured Sales Ledger",
+                title = "Daily Sales Ledger",
                 nativeSubtitle = "दैनिक बिक्री खाता (Sales Ledger)",
-                description = "दैनिक बिक्री बोलें; सीधे स्प्रेडशीट/एक्सेल में निर्यात करें।",
+                description = "दुकान की दैनिक बिक्री बोलें; हिसाब अपने-आप तैयार होगा।",
                 destination = VernAiNavDestination.SalesLedger()
             ),
             FeatureCardItem(
                 id = "complaint",
-                title = "Formal Complaint Drafting",
-                nativeSubtitle = "शिकायत पत्र (Complaint Letter)",
-                description = "जिला कलेक्टर या अधिकारियों के लिए औपचारिक शिकायत पत्र तैयार करें।",
+                title = "Official Letter",
+                nativeSubtitle = "शिकायत / प्रार्थना पत्र (Official Letter)",
+                description = "कलेक्टर या अधिकारियों के लिए औपचारिक पत्र आसानी से तैयार करें।",
                 destination = VernAiNavDestination.ComplaintDrafting()
             ),
             FeatureCardItem(
                 id = "doc",
-                title = "Local Document Explainer",
+                title = "Document Reader",
                 nativeSubtitle = "दस्तावेज़ विवरण (Document Reader)",
                 description = "कठिन सरकारी व छात्रवृत्ति फॉर्म को सरल भाषा में समझें।",
                 destination = VernAiNavDestination.DocumentExplainer
@@ -90,60 +90,60 @@ fun getFeaturesForLanguage(language: Language): List<FeatureCardItem> {
         Language.ENGLISH -> listOf(
             FeatureCardItem(
                 id = "voice",
-                title = "Voice Workspace & Live ASR",
-                nativeSubtitle = "Voice Assistant & Live ASR",
-                description = "Speak freely in Indic/English; transcribe live and extract automated actions.",
+                title = "Voice Assistant",
+                nativeSubtitle = "Voice Assistant",
+                description = "Speak naturally in your language to get instant assistance.",
                 destination = VernAiNavDestination.VoiceWorkspace
             ),
             FeatureCardItem(
                 id = "sales",
-                title = "Structured Sales Ledger",
-                nativeSubtitle = "Sales Ledger (Voice-to-Sheets)",
-                description = "Speak daily transactions; auto-extract to typed ledger & export to Sheets/Excel.",
+                title = "Daily Sales Ledger",
+                nativeSubtitle = "Daily Sales Ledger",
+                description = "Speak your shop sales to auto-calculate totals and export.",
                 destination = VernAiNavDestination.SalesLedger()
             ),
             FeatureCardItem(
                 id = "complaint",
-                title = "Formal Complaint Drafting",
-                nativeSubtitle = "Complaint & Petition Drafting",
-                description = "Draft administrative complaints in regional language with English copy.",
+                title = "Official Letter",
+                nativeSubtitle = "Official Letter & Petition",
+                description = "Draft formal petitions and complaints for officials in 1 minute.",
                 destination = VernAiNavDestination.ComplaintDrafting()
             ),
             FeatureCardItem(
                 id = "doc",
-                title = "Local Document Explainer",
-                nativeSubtitle = "Document Reader & Guidance",
-                description = "Zero-hallucination explainer and guidance for dense official PDFs and forms.",
+                title = "Document Explainer",
+                nativeSubtitle = "Document Explainer",
+                description = "Understand complex scholarship and government forms with ease.",
                 destination = VernAiNavDestination.DocumentExplainer
             )
         )
         else -> listOf(
             FeatureCardItem(
                 id = "voice",
-                title = "Voice Workspace & Live ASR",
-                nativeSubtitle = "వాయిస్ వర్క్‌స్పేస్ (Voice Assistant)",
-                description = "మీ భాషలో మాట్లాడండి; ప్రత్యక్ష వచన రూపం మరియు ఆటోమేటెడ్ పనులు.",
+                title = "Voice Assistant",
+                nativeSubtitle = "వాయిస్ సహాయకుడు (Voice Assistant)",
+                description = "మీ గొంతుతో మాట్లాడండి; ఏ పనైనా వెంటనే పూర్తవుతుంది.",
                 destination = VernAiNavDestination.VoiceWorkspace
             ),
             FeatureCardItem(
                 id = "sales",
-                title = "Structured Sales Ledger",
-                nativeSubtitle = "అమ్మకాల లాగ్ (Sales Log)",
-                description = "రోజూవారీ అమ్మకాలను మాట్లాడండి; టైప్ చేసిన లెడ్జర్‌గా మార్చి ఎగుమతి చేయండి.",
+                title = "Daily Sales Ledger",
+                nativeSubtitle = "అమ్మకాల లెడ్జర్ (Sales Ledger)",
+                description = "దుకాణం రోజూవారీ అమ్మకాలను మాట్లాడండి; లెక్కలు ఆటోమేటిక్‌గా సిద్ధం.",
                 destination = VernAiNavDestination.SalesLedger()
             ),
             FeatureCardItem(
                 id = "complaint",
-                title = "Formal Complaint Drafting",
-                nativeSubtitle = "ఫిర్యాదు పత్రం (Complaint Letter)",
-                description = "జిల్లా కలెక్టర్ లేదా అధికారులకు అధికారిక ఫిర్యాదు పత్రం రూపొందించండి.",
+                title = "Official Letter",
+                nativeSubtitle = "అధికారిక లేఖ (Official Letter)",
+                description = "కలెక్టర్ లేదా అధికారులకు ఫిర్యాదు లేదా దరఖాస్తు లేఖ రాయండి.",
                 destination = VernAiNavDestination.ComplaintDrafting()
             ),
             FeatureCardItem(
                 id = "doc",
-                title = "Local Document Explainer",
+                title = "Document Reader",
                 nativeSubtitle = "పత్ర వివరణ (Document Reader)",
-                description = "ఆఫ్‌లైన్ PDFలు/స్కాన్‌ల నుండి ముఖ్యమైన అంశాలను సులభంగా అర్థం చేసుకోండి.",
+                description = "స్కాలర్‌షిప్ లేదా ప్రభుత్వ ఫారాలను సులభమైన తెలుగులో అర్థం చేసుకోండి.",
                 destination = VernAiNavDestination.DocumentExplainer
             )
         )

@@ -128,8 +128,20 @@ fun SalesLogScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("అమ్మకాల లెడ్జర్ (Sales Ledger)", fontWeight = FontWeight.Bold, fontSize = 18.sp)
-                        Text("Deterministic Telugu Voice-to-Ledger", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val title = when (state.selectedLanguage) {
+                            com.vernai.core.model.Language.TAMIL -> "விற்பனை பதிவேடு (Sales Ledger)"
+                            com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "दैनिक बिक्री खाता (Sales Ledger)"
+                            com.vernai.core.model.Language.ENGLISH -> "Daily Sales Ledger"
+                            else -> "అమ్మకాల లెడ్జర్ (Sales Ledger)"
+                        }
+                        val subtitle = when (state.selectedLanguage) {
+                            com.vernai.core.model.Language.TAMIL -> "பேசி கணக்கு பதியுங்கள் • 100% ஆஃப்லைன்"
+                            com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "बोलकर हिसाब लिखें • 100% ऑफ़लाइन"
+                            com.vernai.core.model.Language.ENGLISH -> "Speak daily transactions • 100% Offline"
+                            else -> "అమ్మకాలను మాట్లాడండి • 100% ఆఫ్‌లైన్"
+                        }
+                        Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 },
                 navigationIcon = {
@@ -503,40 +515,36 @@ fun SampleDictationsRow(
     onSelectSample: (String) -> Unit
 ) {
     val header = when (selectedLanguage) {
-        com.vernai.core.model.Language.TAMIL -> "மாதிரி வாக்கியங்கள் (Quick Voice Samples):"
-        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "नमूना वाक्य (Quick Voice Samples):"
-        com.vernai.core.model.Language.ENGLISH -> "Quick Voice Samples:"
-        else -> "నమూనా వాక్యాలు (Quick Voice Samples):"
+        com.vernai.core.model.Language.TAMIL -> "💡 உதாரணமாக இப்படி சொல்லுங்கள் (Try saying):"
+        com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> "💡 उदाहरण के लिए ऐसे बोलें (Try saying):"
+        com.vernai.core.model.Language.ENGLISH -> "💡 Try saying these examples:"
+        else -> "💡 ఉదాహరణకు ఇలా చెప్పండి (Try saying):"
     }
 
     val samples: List<Pair<String, String>> = when (selectedLanguage) {
         com.vernai.core.model.Language.TAMIL -> listOf(
-            "5 கிலோ தக்காளி 200 ரூபாய்" to "5 கிலோ தக்காளி 200",
-            "2 பாக்கெட் எண்ணெய் 260 ரூபாய் ரொக்கம்" to "2 எண்ணெய் 260 ரொக்கம்",
-            "10 கிலோ அரிசி கிலோ 40 ரூபாய் மொத்தம் 350" to "அரிசி முரண்பாடு (Discrepancy)",
-            "தக்காளி 150 ரூபாய்" to "தக்காளி (அளவு கேட்க வேண்டும்)",
-            "1 டஜன் சோப்பு 120 ரூபாய் கடன்" to "சோப்பு கடன் (Credit)"
+            "5 கிலோ தக்காளி 200 ரூபாய்" to "🍅 5 கிலோ தக்காளி 200",
+            "2 பாக்கெட் எண்ணெய் 260 ரூபாய் ரொக்கம்" to "🧴 2 எண்ணெய் 260 ரொக்கம்",
+            "10 கிலோ அரிசி 400 ரூபாய்" to "🌾 10 கிலோ அரிசி 400",
+            "1 டஜன் சோப்பு 120 ரூபாய் கடன்" to "🧼 1 டஜன் சோப்பு 120 கடன்"
         )
         com.vernai.core.model.Language.HINDI, com.vernai.core.model.Language.MARATHI -> listOf(
-            "5 किलो टमाटर 200 रुपये" to "5 किलो टमाटर 200",
-            "2 पैकेट तेल 260 रुपये नकद" to "2 पैकेट तेल 260 नकद",
-            "10 किलो चावल किलो 40 रुपये कुल 350" to "चावल हिसाब विसंगति (Discrepancy)",
-            "टमाटर 150 रुपये" to "टमाटर (मात्रा पूछें)",
-            "1 दर्जन साबुन 120 रुपये उधार" to "साबुन उधार (Credit)"
+            "5 किलो टमाटर 200 रुपये" to "🍅 5 किलो टमाटर 200",
+            "2 पैकेट तेल 260 रुपये नकद" to "🧴 2 पैकेट तेल 260 नकद",
+            "10 किलो चावल 400 रुपये" to "🌾 10 किलो चावल 400",
+            "1 दर्जन साबुन 120 रुपये उधार" to "🧼 1 दर्जन साबुन 120 उधार"
         )
         com.vernai.core.model.Language.ENGLISH -> listOf(
-            "5 kg tomato 200 rupees" to "5 kg tomato 200",
-            "2 packets oil 260 rupees cash" to "2 packets oil 260 cash",
-            "10 kg rice at 40 rupees total 350" to "Rice discrepancy",
-            "Tomato 150 rupees" to "Tomato (Ask quantity)",
-            "1 dozen soap 120 rupees credit" to "Soap credit"
+            "5 kg tomato 200 rupees" to "🍅 5 kg tomato 200",
+            "2 packets oil 260 rupees cash" to "🧴 2 packets oil 260 cash",
+            "10 kg rice 400 rupees" to "🌾 10 kg rice 400",
+            "1 dozen soap 120 rupees credit" to "🧼 1 dozen soap 120 credit"
         )
         else -> listOf(
-            "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు" to "5 కేజీల టమాటా 200",
-            "2 నూనె ప్యాకెట్లు 260 రూపాయలు నగదు" to "2 నూనె ప్యాకెట్లు 260 నగదు",
-            "10 కేజీల బియ్యం కేజీ 40 రూపాయలు మొత్తం 350" to "బియ్యం లెక్క తేడా (Discrepancy)",
-            "టమాటా 150 రూపాయలు" to "టమాటా (పరిమాణం అడగాలి)",
-            "1 డజన్ సబ్బులు 120 రూపాయలు రమేష్ కి అరువు" to "సబ్బులు అరువు (Credit)"
+            "ఈరోజు 5 కేజీల టమాటా 200 రూపాయలు" to "🍅 5 కేజీల టమాటా 200",
+            "2 నూనె ప్యాకెట్లు 260 రూపాయలు నగదు" to "🧴 2 నూనె ప్యాకెట్లు 260",
+            "10 కేజీల బియ్యం 400 రూపాయలు" to "🌾 10 కేజీల బియ్యం 400",
+            "1 డజన్ సబ్బులు 120 రూపాయలు రమేష్ కి అరువు" to "🧼 1 డజన్ సబ్బులు 120 అరువు"
         )
     }
 

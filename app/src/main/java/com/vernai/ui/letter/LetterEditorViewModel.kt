@@ -79,6 +79,9 @@ class LetterEditorViewModel(
             is LetterUiIntent.SaveLetterDraft -> saveDraft()
             is LetterUiIntent.ExportDocument -> exportLetter(intent.format, intent.cacheDir)
             is LetterUiIntent.RequestExport -> handleExportRequest(intent.format, intent.cacheDir)
+            is LetterUiIntent.PrintLetter -> handlePrintRequest(intent.cacheDir)
+            is LetterUiIntent.ToggleSpeech -> toggleSpeech()
+            is LetterUiIntent.SetSpeakingState -> setState { copy(isSpeaking = intent.isSpeaking) }
             is LetterUiIntent.SetUserReviewed -> setState { copy(isUserReviewed = intent.isReviewed) }
             is LetterUiIntent.ConfirmReviewAndExport -> confirmReviewAndExport()
             is LetterUiIntent.DismissReviewDialog -> setState { copy(showReviewDialog = false, pendingExportFormat = null) }
@@ -88,10 +91,12 @@ class LetterEditorViewModel(
 
     private fun handleInitializeWithTranscript(transcript: String) {
         val clean = transcript.trim()
+        val isLeave = clean.contains(Regex("leave|సెలవు|छुट्टी|விடுப்பு", RegexOption.IGNORE_CASE))
         val facts = extractFactsFromTranscript(clean)
         setState {
             copy(
                 voiceTranscript = clean,
+                letterType = if (isLeave) LetterType.REQUEST else LetterType.COMPLAINT,
                 userFactsText = facts.joinToString("\n") { "- $it" },
                 isDraft = true,
                 isUserReviewed = false,
@@ -264,6 +269,81 @@ class LetterEditorViewModel(
                 }
                 is VernAiResult.Loading -> Unit
             }
+        }
+    }
+
+    private fun handlePrintRequest(cacheDir: File) {
+        val existing = uiState.value.exportedFile
+        if (existing != null && existing.exists() && existing.name.endsWith(".pdf", ignoreCase = true)) {
+            sendSideEffect(LetterUiSideEffect.PrintDocument(existing))
+            return
+        }
+
+        setState { copy(isExporting = true) }
+        viewModelScope.launch(dispatchers.io) {
+            val fileDate = uiState.value.date.ifBlank {
+                SimpleDateFormat("dd-MM-yyyy", Locale.getDefault()).format(Date())
+            }
+            val destination = File(cacheDir, "వినతిపత్రం_Complaint_$fileDate.pdf")
+            val finalSubject = if (!uiState.value.isUserReviewed) {
+                "[చిత్తు ప్రతి - ధృవీకరణ అవసరం] ${uiState.value.subject}"
+            } else {
+                uiState.value.subject
+            }
+            val finalBody = if (!uiState.value.isUserReviewed) {
+                "*** [చిత్తు ప్రతి - ధృవీకరణ అవసరం / DRAFT - VERIFICATION REQUIRED] ***\n\n" + uiState.value.vernacularBody
+            } else {
+                uiState.value.vernacularBody
+            }
+            val draft = ComplaintDraft(
+                subject = finalSubject,
+                department = uiState.value.recipientDepartment,
+                recipientDesignation = uiState.value.recipientDesignation,
+                vernacularBody = finalBody,
+                englishTranslation = uiState.value.englishTranslation,
+                targetLanguage = Language.TELUGU,
+                senderName = uiState.value.applicantName.ifBlank { null },
+                location = uiState.value.location.ifBlank { null }
+            )
+            val result = exporter.exportComplaintLetter(
+                draft = draft,
+                destinationFile = destination,
+                config = ExportConfig(format = ExportFormat.PDF, targetLanguage = Language.TELUGU)
+            )
+            when (result) {
+                is VernAiResult.Success -> {
+                    setState { copy(isExporting = false, exportedFile = result.data) }
+                    sendSideEffect(LetterUiSideEffect.PrintDocument(result.data))
+                }
+                is VernAiResult.Error -> {
+                    setState { copy(isExporting = false) }
+                    sendSideEffect(LetterUiSideEffect.ShowToast("ప్రింట్ కోసం PDF తయారీలో లోపం: ${result.message}"))
+                }
+                is VernAiResult.Loading -> Unit
+            }
+        }
+    }
+
+    private fun toggleSpeech() {
+        if (uiState.value.isSpeaking) {
+            setState { copy(isSpeaking = false) }
+            sendSideEffect(LetterUiSideEffect.StopSpeaking)
+        } else {
+            val textToSpeak = if (uiState.value.vernacularBody.isNotBlank()) {
+                "${uiState.value.subject}. ${uiState.value.salutation}. ${uiState.value.vernacularBody}"
+            } else if (uiState.value.userFactsText.isNotBlank()) {
+                uiState.value.userFactsText
+            } else {
+                uiState.value.voiceTranscript
+            }
+
+            if (textToSpeak.isBlank()) {
+                sendSideEffect(LetterUiSideEffect.ShowToast("చదవడానికి ఎటువంటి వచనం లేదు (No text to read aloud)"))
+                return
+            }
+
+            setState { copy(isSpeaking = true) }
+            sendSideEffect(LetterUiSideEffect.SpeakText(textToSpeak, Language.TELUGU))
         }
     }
 

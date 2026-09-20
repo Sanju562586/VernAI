@@ -58,6 +58,13 @@ import com.vernai.domain.model.letter.LetterType
 import com.vernai.ui.theme.StatusGreen
 import com.vernai.ui.theme.StatusRed
 
+import androidx.compose.material.icons.filled.Print
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.runtime.DisposableEffect
+import com.vernai.ai.tts.OnDeviceTtsManager
+import com.vernai.document.export.PanchayatPrintManager
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LetterEditorScreen(
@@ -68,6 +75,13 @@ fun LetterEditorScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val ttsManager = remember { OnDeviceTtsManager(context) }
+
+    DisposableEffect(ttsManager) {
+        onDispose {
+            ttsManager.shutdown()
+        }
+    }
 
     LaunchedEffect(initialTranscript) {
         if (!initialTranscript.isNullOrBlank()) {
@@ -95,6 +109,23 @@ fun LetterEditorScreen(
                         Toast.makeText(context, "లోపం: ${e.message}", Toast.LENGTH_SHORT).show()
                     }
                 }
+                is LetterUiSideEffect.PrintDocument -> {
+                    val jobName = if (state.subject.isNotBlank()) state.subject else "వినతిపత్రం_లేఖ"
+                    val success = PanchayatPrintManager.printPdf(context, effect.file, jobName)
+                    if (!success) {
+                        Toast.makeText(context, "ప్రింటింగ్ విఫలమైంది. ప్రింటర్‌ను తనిఖీ చేయండి", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is LetterUiSideEffect.SpeakText -> {
+                    val started = ttsManager.speak(effect.text, effect.language)
+                    if (!started) {
+                        viewModel.handleIntent(LetterUiIntent.SetSpeakingState(false))
+                        Toast.makeText(context, "వాయిస్ చదవడం ప్రారంభించలేకపోయాము. డివైస్ TTS సెట్టింగ్స్ చూడండి", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                is LetterUiSideEffect.StopSpeaking -> {
+                    ttsManager.stop()
+                }
             }
         }
     }
@@ -117,6 +148,34 @@ fun LetterEditorScreen(
                     }
                 },
                 actions = {
+                    // Read Aloud / Stop Voice
+                    IconButton(
+                        onClick = { viewModel.handleIntent(LetterUiIntent.ToggleSpeech) }
+                    ) {
+                        if (state.isSpeaking) {
+                            Icon(
+                                Icons.Default.VolumeOff,
+                                contentDescription = "వాయిస్ ఆపు (Stop)",
+                                tint = MaterialTheme.colorScheme.error
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.VolumeUp,
+                                contentDescription = "చదివి వినిపించు (Read Aloud)",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Direct Panchayat Print
+                    IconButton(
+                        onClick = { viewModel.handleIntent(LetterUiIntent.PrintLetter(context.cacheDir)) },
+                        enabled = !state.isExporting
+                    ) {
+                        Icon(Icons.Default.Print, contentDescription = "పంచాయతీ ప్రింట్ (Print)")
+                    }
+
+                    // Save to Room DB
                     IconButton(
                         onClick = { viewModel.handleIntent(LetterUiIntent.SaveLetterDraft) },
                         enabled = !state.isSaving
@@ -138,9 +197,12 @@ fun LetterEditorScreen(
                 isRegenerating = state.isRegenerating,
                 isSaving     = state.isSaving,
                 isExporting  = state.isExporting,
+                isSpeaking   = state.isSpeaking,
                 onGenerate   = { viewModel.handleIntent(LetterUiIntent.GenerateLetter) },
                 onRegenerate = { viewModel.handleIntent(LetterUiIntent.RegenerateLetter) },
                 onSave       = { viewModel.handleIntent(LetterUiIntent.SaveLetterDraft) },
+                onToggleSpeech = { viewModel.handleIntent(LetterUiIntent.ToggleSpeech) },
+                onPrint      = { viewModel.handleIntent(LetterUiIntent.PrintLetter(context.cacheDir)) },
                 onExportPdf  = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.PDF, context.cacheDir)) },
                 onExportDocx = { viewModel.handleIntent(LetterUiIntent.RequestExport(ExportFormat.DOCX, context.cacheDir)) }
             )
@@ -227,7 +289,7 @@ fun InputsTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
         Spacer(modifier = Modifier.height(8.dp))
 
         // Letter type selector
-        SectionLabel(text = "లేఖ రకం")
+        SectionLabel(text = "1. లేఖ రకం (Letter Type)")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -249,35 +311,35 @@ fun InputsTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
         }
 
         // Spoken issue
-        SectionLabel(text = "సమస్య వివరణ")
+        SectionLabel(text = "2. సమస్య లేదా విన్నపం (Describe your issue)")
         OutlinedTextField(
             value = state.voiceTranscript,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateVoiceTranscript(it)) },
-            placeholder = { Text("మీ సమస్యను ఇక్కడ రాయండి…") },
+            placeholder = { Text("ఉదా: మా వీధిలో వీధి దీపాలు వెలగడం లేదు, రాత్రి వేళల్లో రాకపోకలకు ఇబ్బందిగా ఉంది...") },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             shape = RoundedCornerShape(12.dp)
         )
 
         // Recipient
-        SectionLabel(text = "స్వీకర్త")
+        SectionLabel(text = "3. ఎవరికి పంపాలి? (Whom to send)")
         OutlinedTextField(
             value = state.recipientDesignation,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateRecipientDesignation(it)) },
-            placeholder = { Text("అధికారి హోదా (ఉదా: సర్పంచ్)") },
+            placeholder = { Text("అధికారి హోదా (ఉదా: జిల్లా కలెక్టర్, గ్రామ సర్పంచ్)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
         OutlinedTextField(
             value = state.recipientDepartment,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateRecipientDepartment(it)) },
-            placeholder = { Text("శాఖ లేదా కార్యాలయం") },
+            placeholder = { Text("కార్యాలయం లేదా శాఖ (ఉదా: కలెక్టరేట్, గ్రామ పంచాయతీ)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
 
         // Location & date row
-        SectionLabel(text = "స్థలం & తేదీ")
+        SectionLabel(text = "4. స్థలం & తేదీ (Place & Date)")
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -299,10 +361,11 @@ fun InputsTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
         }
 
         // Applicant name
+        SectionLabel(text = "5. మీ పేరు (Your Name)")
         OutlinedTextField(
             value = state.applicantName,
             onValueChange = { viewModel.handleIntent(LetterUiIntent.UpdateApplicantName(it)) },
-            placeholder = { Text("దరఖాస్తుదారుడి పేరు (ఐచ్ఛికం)") },
+            placeholder = { Text("దరఖాస్తుదారుడి పేరు (ఉదా: రాము)") },
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(12.dp)
         )
@@ -319,11 +382,11 @@ fun InputsTab(state: LetterUiState, viewModel: LetterEditorViewModel) {
             if (state.isGenerating) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.onPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("రూపొందిస్తున్నది…")
+                Text("లేఖ రూపొందిస్తున్నది…")
             } else {
                 Icon(Icons.Default.AutoAwesome, contentDescription = null)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("లేఖ రూపొందించండి")
+                Text("లేఖను సిద్ధం చేయండి (Draft Letter) ✨")
             }
         }
 
@@ -435,9 +498,12 @@ fun LetterActionBar(
     isRegenerating: Boolean,
     isSaving: Boolean,
     isExporting: Boolean,
+    isSpeaking: Boolean,
     onGenerate: () -> Unit,
     onRegenerate: () -> Unit,
     onSave: () -> Unit,
+    onToggleSpeech: () -> Unit,
+    onPrint: () -> Unit,
     onExportPdf: () -> Unit,
     onExportDocx: () -> Unit
 ) {
@@ -447,8 +513,8 @@ fun LetterActionBar(
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Left action — Generate or Regenerate
@@ -464,7 +530,7 @@ fun LetterActionBar(
                         Icon(Icons.Default.AutoAwesome, contentDescription = null, modifier = Modifier.size(14.dp))
                     }
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("రూపొందించు")
+                    Text("రూపొందించు", maxLines = 1)
                 }
             } else {
                 OutlinedButton(
@@ -478,8 +544,28 @@ fun LetterActionBar(
                         Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
                     }
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text("తిరిగి రాయి")
+                    Text("తిరిగి రాయి", maxLines = 1)
                 }
+            }
+
+            // Read Aloud / Stop
+            FilledTonalButton(
+                onClick = onToggleSpeech
+            ) {
+                Icon(
+                    imageVector = if (isSpeaking) Icons.Default.VolumeOff else Icons.Default.VolumeUp,
+                    contentDescription = "చదివి వినిపించు",
+                    modifier = Modifier.size(16.dp),
+                    tint = if (isSpeaking) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Print Directly at Panchayat
+            FilledTonalButton(
+                onClick = onPrint,
+                enabled = !isExporting
+            ) {
+                Icon(Icons.Default.Print, contentDescription = "పంచాయతీ ప్రింట్", modifier = Modifier.size(16.dp))
             }
 
             // Save
@@ -487,13 +573,8 @@ fun LetterActionBar(
                 if (isSaving) {
                     CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
                 } else {
-                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(16.dp))
                 }
-            }
-
-            // DOCX
-            FilledTonalButton(onClick = onExportDocx, enabled = !isExporting) {
-                Text("DOCX", fontSize = 12.sp)
             }
 
             // PDF

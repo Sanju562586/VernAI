@@ -10,6 +10,7 @@ import com.vernai.core.model.ExplanationReport
 import com.vernai.core.model.Language
 import com.vernai.domain.repository.DocumentRepository
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.UUID
 
 /**
@@ -46,21 +47,22 @@ class ExplainDocumentUseCase(
     ): VernAiResult<ExplanationReport> = withContext(dispatchers.default) {
         val prompt = buildSummarizationPrompt(documentText, targetLanguage)
 
-        val llmResult = inferenceLock.withLlmLock {
-            llmEngine.generateCompleteText(
-                prompt = prompt,
-                params = GenerationParameters(temperature = 0.2f)
-            )
+        val llmResult = withTimeoutOrNull(3500L) {
+            runCatching {
+                inferenceLock.withLlmLock {
+                    llmEngine.generateCompleteText(
+                        prompt = prompt,
+                        params = GenerationParameters(temperature = 0.2f)
+                    )
+                }
+            }.getOrNull()
         }
 
         val report = when (llmResult) {
             is VernAiResult.Success -> {
                 parseExplanationReport(llmResult.data, documentTitle, documentText, targetLanguage)
             }
-            is VernAiResult.Error -> {
-                buildDeterministicFallbackReport(documentTitle, documentText, targetLanguage)
-            }
-            is VernAiResult.Loading -> {
+            else -> {
                 buildDeterministicFallbackReport(documentTitle, documentText, targetLanguage)
             }
         }
@@ -100,16 +102,20 @@ class ExplainDocumentUseCase(
             <|im_start|>assistant
         """.trimIndent()
 
-        val llmResult = inferenceLock.withLlmLock {
-            llmEngine.generateCompleteText(
-                prompt = prompt,
-                params = GenerationParameters(temperature = 0.2f)
-            )
+        val llmResult = withTimeoutOrNull(3500L) {
+            runCatching {
+                inferenceLock.withLlmLock {
+                    llmEngine.generateCompleteText(
+                        prompt = prompt,
+                        params = GenerationParameters(temperature = 0.2f)
+                    )
+                }
+            }.getOrNull()
         }
 
         return@withContext when (llmResult) {
             is VernAiResult.Success -> VernAiResult.Success(llmResult.data.trim())
-            is VernAiResult.Error -> {
+            else -> {
                 val fallbackExplanation = when (targetLanguage) {
                     Language.TAMIL -> "தேர்ந்தெடுக்கப்பட்ட பகுதியின் விளக்கம்: $selectedText பற்றி தொடர்புடைய அலுவலகத்தில் உறுதிப்படுத்த வேண்டும். ஆவணத்தில் உள்ள வழிமுறைகளை பின்பற்றவும்."
                     Language.HINDI -> "चयनित अंश का विवरण: $selectedText के संबंध में संबंधित कार्यालय से पुष्टि करें। दस्तावेज़ में दिए गए निर्देशों का पालन करें।"
@@ -119,7 +125,6 @@ class ExplainDocumentUseCase(
                 }
                 VernAiResult.Success(fallbackExplanation)
             }
-            is VernAiResult.Loading -> VernAiResult.Loading(llmResult.progress, llmResult.stage)
         }
     }
 

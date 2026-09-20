@@ -10,15 +10,15 @@
 | Metric | Strict (Unnormalized) | Canonicalized (Normalized) | Target Benchmark |
 | :--- | :---: | :---: | :---: |
 | **Word Error Rate (WER)** | **130.98%** | **162.70%** | < 25.0% |
-| **Character Error Rate (CER)** | **87.82%** | **111.99%** | < 12.0% |
+| **Character Error Rate (CER)** | **87.82%** | **111.72%** | < 12.0% |
 | **Real-Time Factor (RTF)** | — | **0.001x** | < 0.40x (Faster than real-time) |
-| **P95 Latency** | — | **2 ms** | < 500 ms |
+| **P95 Latency** | — | **0 ms** | < 500 ms |
 
 ## 2. Domain & Dialect Performance Breakdown
 
 | Domain Category | Samples | Strict WER | Normalized WER | Normalized CER | Mean RTF |
 | :--- | :---: | :---: | :---: | :---: | :---: |
-| Rural agriculture | 3 | 126.36% | 154.62% | 119.68% | 0.001x |
+| Rural agriculture | 3 | 126.36% | 154.62% | 118.25% | 0.001x |
 | Local proper names | 3 | 163.81% | 204.76% | 124.85% | 0.001x |
 | Numbers and currency | 3 | 84.44% | 102.22% | 71.55% | 0.001x |
 | Dialect telangana | 2 | 135.00% | 168.75% | 107.27% | 0.001x |
@@ -58,7 +58,7 @@
 | Retroflex-Dental Confusion (ణ/న, ళ/ల: కొట్టడానికి vs రెండు) | 1 | 0.5% | Subtle formant transition differences between alveolar and retroflex consonants (e.g. ణ vs న, ళ vs ల). |
 | Retroflex-Dental Confusion (ణ/న, ళ/ల: కరెంట్ vs నూనె) | 1 | 0.5% | Subtle formant transition differences between alveolar and retroflex consonants (e.g. ణ vs న, ళ vs ల). |
 | Retroflex-Dental Confusion (ణ/న, ళ/ల: మోటారు vs ప్యాకెట్లు) | 1 | 0.5% | Subtle formant transition differences between alveolar and retroflex consonants (e.g. ణ vs న, ళ vs ల). |
-| General Lexical Substitution (బోరు -> వందల) | 1 | 0.5% | Acoustic-phonetic substitution in complex triple-consonant conjuncts. |
+| General Lexical Substitution (బోరుబావి -> వందల) | 1 | 0.5% | Acoustic-phonetic substitution in complex triple-consonant conjuncts. |
 | General Lexical Substitution (బావి -> అరవై) | 1 | 0.5% | Acoustic-phonetic substitution in complex triple-consonant conjuncts. |
 | General Lexical Substitution (నీరు -> రూపాయలు) | 1 | 0.5% | Acoustic-phonetic substitution in complex triple-consonant conjuncts. |
 | General Lexical Substitution (అవసరం -> అమ్మిన) | 1 | 0.5% | Acoustic-phonetic substitution in complex triple-consonant conjuncts. |
